@@ -1,0 +1,43 @@
+
+Total Functional Programming experiment:
+
+- Every valid expression must evaluate to a value.
+    - The system must reject any program that doesn't halt.
+    - Unfortunately this means the system will reject some valid programs too.
+
+- Many evaluation strategies are possible:
+    - A naive tree rewriter (which could also work on open terms)
+    - Transliterate to a strict untyped language (Scheme or JS)
+    - Compile to a GC-free subset of JS or Webassembly (certain types only)
+    - Compile to GLSL (certain types only)
+
+
+TODO list:
+
+rough implementation:
+- parse and pretty-print some concrete syntax
+    - value definitions as sets of equations
+- typechecker
+- termination checker
+- rewrite-based evaluator
+
+
+- trace viewer
+    - like "resugaring", except instead of macros we have normal function calls
+    - map f [1,2,3]  steps immediately to  [f 1, f 2, f 3]  if we hide map
+        - even if map is defined in terms of fold
+
+
+- notebook
+    - constantly recompute the type and value of every def (and expr)
+    - don't let a bad def prevent you from checking/running other defs
+    -
+
+
+- JS evaluator
+    - try representing Nat as a plain integer
+        - on overflow, crash
+            - every implementation must either match the semantics,
+              or fail.
+            - failure is not part of the semantics,
+              but an unavoidable part of some machines.
