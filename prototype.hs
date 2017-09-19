@@ -3,12 +3,15 @@ import Text.Parsec hiding (State)
 import Text.Parsec.Indent
 import Control.Monad.State
 
+import Test.Hspec
+
+
 
 -- data model
 data Expr = Var String
           | App Expr Expr
           | Lam String Expr
-          deriving (Show)
+          deriving (Show, Eq)
             
 
 -- parsing
@@ -50,10 +53,16 @@ pFactor = pLam
 pExpr :: IParser Expr
 pExpr = chainl1 pFactor (return App)
 
-inputText = "f x"
+test :: IO ()
+test = hspec $ do
+  describe "pExpr" $ do
+    let means s e =
+          it (s ++ " `means` " ++ show e) $ do
+            iParse pExpr "example" s `shouldBe` (Right e)
+    "x" `means` (Var "x")
+    "f x" `means` (App (Var "f") (Var "x"))
+    "f x y" `means` (App (App (Var "f") (Var "x")) (Var "y"))
+    "f x y" `means` (App (App (Var "f") (Var "x")) (Var "y"))
+    "f x y \\z.q" `means` (App (App (App (Var "f") (Var "x")) (Var "y")) (Lam "z" (Var "q")))
 
-main :: IO ()
-main = do
-  case iParse pExpr "example" inputText of
-   Left err -> print err
-   Right result -> putStrLn ("I parsed: " ++ show result)
+
