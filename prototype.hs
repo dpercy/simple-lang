@@ -16,9 +16,7 @@ data Def = DefVal [Equation]
          -- | DefData ...
          deriving (Show, Eq)
 
-data Equation = Equation { name :: Lowercase
-                         , params :: [Pattern]
-                         , value :: Expr }
+data Equation = Equation Lowercase [Pattern] Expr
               deriving (Show, Eq)
 
 data Pattern = Hole Lowercase
@@ -102,14 +100,33 @@ pEquation = withPos $ do
 
 
 pEquations :: IParser [Equation]
-pEquations = many $ do
-  eq <- pEquation
-  spaces
-  return eq
+pEquations = many pEquation
+
+
+pProgram :: IParser Program
+pProgram = gather <$> pEquations
+  where gather eqs = map gatherName $ unique $ map getName eqs
+          where gatherName name = DefVal (filter (nameIs name) eqs)
+                nameIs name1 (Equation name2 _ _) = name1 == name2
+                getName (Equation name _ _) = name
+
+
+unique :: (Ord a, Eq a) => [a] -> [a]
+unique = loop []
+  where loop seen [] = reverse seen
+        loop seen (x:xs) | x `elem` seen = loop seen xs
+        loop seen (x:xs) = loop (x:seen) xs
 
 
 test :: IO ()
 test = hspec $ do
+  describe "unique" $ do
+    it "uniques locally" $ do
+      unique [1, 1, 2] `shouldBe` [1, 2]
+    it "preserves order" $ do
+      unique [2, 1] `shouldBe` [2, 1]
+    it "uniques globally" $ do
+      unique [1, 1, 2, 1, 5, 5, 4, 5, 4, 4, 3] `shouldBe` [1,2,5,4,3]
   let prettyLines s = (intercalate "\t" (map show $ lines s))
   describe "pExpr" $ do
     let means s e =
@@ -132,12 +149,15 @@ test = hspec $ do
     "f x = z" `means` [Equation "f" [(Hole "x")] (Var "z")]
     "f (F x) = z" `means` [Equation "f" [Constructor "F" [Hole "x"]] (Var "z")]
     "f (F x) Q = z" `means` [Equation "f" [Constructor "F" [Hole "x"], Constructor "Q" []] (Var "z")]
-    -- TODO more
-    {-
   describe "pProgram" $ do
+    -- pProgram gathers separate equations and groups them by name
     let means s prog =
           it (prettyLines s) $ do
-            iParse pEquations "example" s `shouldBe` (Right prog)
+            iParse pProgram "example" s `shouldBe` (Right prog)
     "x = y" `means` [DefVal [Equation "x" [] (Var "y")]]
+    "x = y\nx = z" `means` [DefVal [Equation "x" [] (Var "y"), Equation "x" [] (Var "z")]]
+    "x = y\na = z" `means` [DefVal [Equation "x" [] (Var "y")], DefVal [Equation "a" [] (Var "z")]]
+    "x = y\na = z\nx = q" `means` [ DefVal [ Equation "x" [] (Var "y")
+                                           , Equation "x" [] (Var "q")]
+                                  , DefVal [ Equation "a" [] (Var "z")]]
 
--}
