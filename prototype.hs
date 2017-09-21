@@ -12,13 +12,19 @@ import Test.Hspec
 -- data model
 type Program = [Def]
 
+-- TODO type parameters
 data Def = DefVal Lowercase [Case]
-         -- TODO introduce data definitions
-         -- | DefData ...
+         | DefData Uppercase [Variant]
          -- TODO introduce type annotations; group them with definitions
          deriving (Show, Eq)
 
 data Case = Case [Pattern] Expr
+          deriving (Show, Eq)
+
+data Variant = Variant Uppercase [Type]
+             deriving (Show, Eq)
+
+data Type = T Uppercase
           deriving (Show, Eq)
 
 data Pattern = Hole Lowercase
@@ -36,11 +42,6 @@ type Uppercase = String
 
 
 -- parsing
-
-data Fragment = Equation Lowercase [Pattern] Expr
-              deriving (Show, Eq)
-
-
 type IParser a = ParsecT String () (State SourcePos) a
 
 iParse :: IParser a -> SourceName -> String -> Either ParseError a
@@ -73,6 +74,19 @@ tokUpper :: IParser Uppercase
 tokUpper = token ((:) <$> upper <*> many alphaNum)
 
 
+reservedWords :: [String]
+reservedWords = [ "data", "type", "case", "match" ]
+
+pVar :: IParser Lowercase
+pVar = try $ do v <- tokLower
+                guard (not (v `elem` reservedWords))
+                return v
+
+pWord :: String -> IParser ()
+pWord word = try $ do v <- tokLower
+                      void $ guard (v == word)
+
+kwData = pWord "data"
 
 
 pParens :: IParser a -> IParser a
@@ -83,7 +97,7 @@ pParens parser = (do token (char '(')
 
 
 pPattern :: IParser Pattern
-pPattern = (Hole <$> tokLower)
+pPattern = (Hole <$> pVar)
            <|> pParens (Constructor <$> tokUpper <*> many pPattern)
            <|> Constructor <$> tokUpper <*> pure []
 
@@ -92,48 +106,48 @@ pExpr :: IParser Expr
 pExpr = chainl1 pFactor (return App)
   where pFactor :: IParser Expr
         pFactor = pParens pExpr
-                  <|> (Var <$> tokLower)
+                  <|> (Var <$> pVar)
                   <|> (Cst <$> tokUpper)
 
 
-pEquation :: IParser Fragment
-pEquation = withPos $ do
-  name <- tokLower
-  params <- same >> many pPattern
-  void $ same >> char '='
-  spaces
-  e <- pExpr
-  return $ Equation name params e
+pDefVal :: IParser Def
+pDefVal = do
+  (name, case0) <- withPos $ do name <- pVar
+                                case0 <- pCase
+                                return (name, case0)
+  cases <- many $ withPos $ do pWord name
+                               pCase
+  return $ DefVal name (case0:cases)
+
+pCase :: IParser Case
+pCase = do
+  pats <- many pPattern
+  token (char '=')
+  expr <- pExpr
+  return $ Case pats expr
 
 
-pFragments :: IParser [Fragment]
-pFragments = many pEquation
+pDefData :: IParser Def
+pDefData = withPos $ do
+  kwData
+  typeName <- tokUpper
+  token (char '=')
+  variants <- pVariant `sepBy` token (char '|')
+  return $ DefData typeName variants
+    where pVariant :: IParser Variant
+          pVariant = Variant <$> tokUpper <*> many (T <$> tokUpper)
+
+
+pDef :: IParser Def
+pDef = pDefData <|> pDefVal
 
 
 pProgram :: IParser Program
-pProgram = gather <$> pFragments
-  where gather frags = map gatherDefVal names
-          where name (Equation n _ _) = n
-                names = unique $ map name frags
-                gatherDefVal n = DefVal n [ Case pats expr
-                                          | (Equation n2 pats expr) <- frags, n == n2 ]
-
-unique :: (Ord a, Eq a) => [a] -> [a]
-unique = loop []
-  where loop seen [] = reverse seen
-        loop seen (x:xs) | x `elem` seen = loop seen xs
-        loop seen (x:xs) = loop (x:seen) xs
+pProgram = many pDef
 
 
 test :: IO ()
 test = hspec $ do
-  describe "unique" $ do
-    it "uniques locally" $ do
-      unique [1, 1, 2] `shouldBe` [1, 2]
-    it "preserves order" $ do
-      unique [2, 1] `shouldBe` [2, 1]
-    it "uniques globally" $ do
-      unique [1, 1, 2, 1, 5, 5, 4, 5, 4, 4, 3] `shouldBe` [1,2,5,4,3]
   let prettyLines s = (intercalate "\t" (map show $ lines s))
   describe "pExpr" $ do
     let means s e =
@@ -144,27 +158,25 @@ test = hspec $ do
     "f x y" `means` (App (App (Var "f") (Var "x")) (Var "y"))
     "f x y" `means` (App (App (Var "f") (Var "x")) (Var "y"))
     "f (x y)" `means` (App (Var "f") (App (Var "x") (Var "y")))
-  describe "pFragments" $ do
-    let means s frags =
-          it (prettyLines s) $ do
-            iParse pFragments "example" s `shouldBe` (Right frags)
-    "x = y" `means` [Equation "x" [] (Var "y")]
-    "x =\n y" `means` [Equation "x" [] (Var "y")]
-    "f = a\ng = b" `means` [Equation "f" [] (Var "a"), Equation "g" [] (Var "b")]
-    " f = a\ng = b" `means` [Equation "f" [] (Var "a"), Equation "g" [] (Var "b")]
-    "f = a\ng =\n b" `means` [Equation "f" [] (Var "a"), Equation "g" [] (Var "b")]
-    "f x = z" `means` [Equation "f" [(Hole "x")] (Var "z")]
-    "f (F x) = z" `means` [Equation "f" [Constructor "F" [Hole "x"]] (Var "z")]
-    "f (F x) Q = z" `means` [Equation "f" [Constructor "F" [Hole "x"], Constructor "Q" []] (Var "z")]
   describe "pProgram" $ do
-    -- pProgram gathers separate equations and groups them by name
     let means s prog =
           it (prettyLines s) $ do
             iParse pProgram "example" s `shouldBe` (Right prog)
     "x = y" `means` [DefVal "x" [Case [] (Var "y")]]
     "x = y\nx = z" `means` [DefVal "x" [Case [] (Var "y"), Case [] (Var "z")]]
     "x = y\na = z" `means` [DefVal "x" [Case [] (Var "y")], DefVal "a" [Case [] (Var "z")]]
-    "x = y\na = z\nx = q" `means` [ DefVal "x" [ Case [] (Var "y")
-                                               , Case [] (Var "q")]
-                                  , DefVal "a" [ Case [] (Var "z")]]
+    -- Note this program is invalid because x is defined twice.
+    "x = y\na = z\nx = q" `means` [ DefVal "x" [ Case [] (Var "y")]
+                                  , DefVal "a" [ Case [] (Var "z")]
+                                  , DefVal "x" [ Case [] (Var "q")] ]
+
+    "f x = x" `means` [ DefVal "f" [ Case [Hole "x"] (Var "x") ]]
+    "f (S x) = x" `means` [ DefVal "f" [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
+    "f (Cons hd tl) = x" `means` [ DefVal "f" [ Case [Constructor "Cons" [ Hole "hd"
+                                                                         , Hole "tl"]]
+                                                (Var "x") ]]
+    "data Nat = O | S Nat" `means` [ DefData "Nat" [ Variant "O" []
+                                                   , Variant "S" [T "Nat"]]]
+    "data NatList = Nil | Cons Nat NatList" `means` [ DefData "NatList" [ Variant "Nil" []
+                                                                        , Variant "Cons" [T "Nat", T "NatList"]]]
 
