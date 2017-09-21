@@ -1,9 +1,11 @@
 
 import Text.Parsec hiding (State, token)
 import Text.Parsec.Indent
+import Text.Parsec.Combinator
 import Control.Monad.State
 
 import Data.List
+import Data.Maybe
 
 import Test.Hspec
 
@@ -13,9 +15,8 @@ import Test.Hspec
 type Program = [Def]
 
 -- TODO type parameters
-data Def = DefVal Lowercase [Case]
+data Def = DefVal Lowercase Type [Case]
          | DefData Uppercase [Variant]
-         -- TODO introduce type annotations; group them with definitions
          deriving (Show, Eq)
 
 data Case = Case [Pattern] Expr
@@ -24,7 +25,9 @@ data Case = Case [Pattern] Expr
 data Variant = Variant Uppercase [Type]
              deriving (Show, Eq)
 
-data Type = T Uppercase
+data Type = B -- blank
+          | T Uppercase
+          | F Type Type
           deriving (Show, Eq)
 
 data Pattern = Hole Lowercase
@@ -73,7 +76,6 @@ tokLower = token ((:) <$> lower <*> many alphaNum)
 tokUpper :: IParser Uppercase
 tokUpper = token ((:) <$> upper <*> many alphaNum)
 
-
 reservedWords :: [String]
 reservedWords = [ "data", "type", "case", "match" ]
 
@@ -112,15 +114,27 @@ pExpr = chainl1 pFactor (return App)
 
 pDefVal :: IParser Def
 pDefVal = do
-  (name, case0) <- withPos $ do name <- pVar
-                                case0 <- pCase
-                                return (name, case0)
-  cases <- many $ withPos $ do pWord name
-                               pCase
-  return $ DefVal name (case0:cases)
+  name <- lookAhead pVar
+  typ <- try (pTypeDecl name) <|> return B
+  cases <- many1 (pCase name)
+  return $ DefVal name typ cases
 
-pCase :: IParser Case
-pCase = do
+pTypeDecl :: String -> IParser Type
+pTypeDecl name = withPos $ do
+  pWord name
+  token (string "::")
+  pType
+
+pType :: IParser Type
+pType = chainl1 pFactor (token (string "->") >> return F)
+  where pFactor :: IParser Type
+        pFactor = pParens pType
+                  <|> (T <$> tokUpper)
+        
+
+pCase :: String -> IParser Case
+pCase name = withPos $ do
+  pWord name
   pats <- many pPattern
   token (char '=')
   expr <- pExpr
@@ -135,7 +149,7 @@ pDefData = withPos $ do
   variants <- pVariant `sepBy` token (char '|')
   return $ DefData typeName variants
     where pVariant :: IParser Variant
-          pVariant = Variant <$> tokUpper <*> many (T <$> tokUpper)
+          pVariant = Variant <$> tokUpper <*> many pType
 
 
 pDef :: IParser Def
@@ -162,21 +176,24 @@ test = hspec $ do
     let means s prog =
           it (prettyLines s) $ do
             iParse pProgram "example" s `shouldBe` (Right prog)
-    "x = y" `means` [DefVal "x" [Case [] (Var "y")]]
-    "x = y\nx = z" `means` [DefVal "x" [Case [] (Var "y"), Case [] (Var "z")]]
-    "x = y\na = z" `means` [DefVal "x" [Case [] (Var "y")], DefVal "a" [Case [] (Var "z")]]
+    "x = y" `means` [DefVal "x" B [Case [] (Var "y")]]
+    "x = y\nx = z" `means` [DefVal "x" B [Case [] (Var "y"), Case [] (Var "z")]]
+    "x = y\na = z" `means` [DefVal "x" B [Case [] (Var "y")], DefVal "a" B [Case [] (Var "z")]]
     -- Note this program is invalid because x is defined twice.
-    "x = y\na = z\nx = q" `means` [ DefVal "x" [ Case [] (Var "y")]
-                                  , DefVal "a" [ Case [] (Var "z")]
-                                  , DefVal "x" [ Case [] (Var "q")] ]
+    "x = y\na = z\nx = q" `means` [ DefVal "x" B [ Case [] (Var "y")]
+                                  , DefVal "a" B [ Case [] (Var "z")]
+                                  , DefVal "x" B [ Case [] (Var "q")] ]
 
-    "f x = x" `means` [ DefVal "f" [ Case [Hole "x"] (Var "x") ]]
-    "f (S x) = x" `means` [ DefVal "f" [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
-    "f (Cons hd tl) = x" `means` [ DefVal "f" [ Case [Constructor "Cons" [ Hole "hd"
+    "f x = x" `means` [ DefVal "f" B [ Case [Hole "x"] (Var "x") ]]
+    "f (S x) = x" `means` [ DefVal "f" B [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
+    "f (Cons hd tl) = x" `means` [ DefVal "f" B [ Case [Constructor "Cons" [ Hole "hd"
                                                                          , Hole "tl"]]
                                                 (Var "x") ]]
     "data Nat = O | S Nat" `means` [ DefData "Nat" [ Variant "O" []
                                                    , Variant "S" [T "Nat"]]]
-    "data NatList = Nil | Cons Nat NatList" `means` [ DefData "NatList" [ Variant "Nil" []
-                                                                        , Variant "Cons" [T "Nat", T "NatList"]]]
+    "data NatList = Nil | Cons Nat NatList" `means` [ DefData "NatList"
+                                                      [ Variant "Nil" []
+                                                      , Variant "Cons" [T "Nat", T "NatList"]]]
+    "f :: Int\nf = x" `means` [ DefVal "f" (T "Int") [ Case [] (Var "x") ] ]
+    "f :: A -> B\nf = x" `means` [ DefVal "f" (F (T "A") (T "B")) [ Case [] (Var "x") ] ]
 
