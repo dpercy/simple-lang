@@ -17,8 +17,10 @@ TODO list:
 rough implementation:
 - parse and pretty-print some concrete syntax
     - value definitions as sets of equations
-- typechecker
-- termination checker
+- totality checker - 3 components:
+    - typechecker (w/ covariant-only type recursion: prevents omega)
+    - case coverage checker (prevents crashing)
+    - termination checker (recursive args must decrease)
 - rewrite-based evaluator
 
 
@@ -41,3 +43,10 @@ rough implementation:
               or fail.
             - failure is not part of the semantics,
               but an unavoidable part of some machines.
+
+
+- language features
+    - typeclasses (or polytypic functions??)
+        - necessary for safe generic equality, sorting, etc
+	- useful for sequencing operators for different types of actions
+	- 

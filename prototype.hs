@@ -12,12 +12,14 @@ import Test.Hspec
 -- data model
 type Program = [Def]
 
-data Def = DefVal [Equation]
+data Def = DefVal Lowercase [Case]
+         -- TODO introduce data definitions
          -- | DefData ...
+         -- TODO introduce type annotations; group them with definitions
          deriving (Show, Eq)
 
-data Equation = Equation Lowercase [Pattern] Expr
-              deriving (Show, Eq)
+data Case = Case [Pattern] Expr
+          deriving (Show, Eq)
 
 data Pattern = Hole Lowercase
              | Constructor Uppercase [Pattern]
@@ -34,6 +36,11 @@ type Uppercase = String
 
 
 -- parsing
+
+data Fragment = Equation Lowercase [Pattern] Expr
+              deriving (Show, Eq)
+
+
 type IParser a = ParsecT String () (State SourcePos) a
 
 iParse :: IParser a -> SourceName -> String -> Either ParseError a
@@ -89,7 +96,7 @@ pExpr = chainl1 pFactor (return App)
                   <|> (Cst <$> tokUpper)
 
 
-pEquation :: IParser Equation
+pEquation :: IParser Fragment
 pEquation = withPos $ do
   name <- tokLower
   params <- same >> many pPattern
@@ -99,17 +106,17 @@ pEquation = withPos $ do
   return $ Equation name params e
 
 
-pEquations :: IParser [Equation]
-pEquations = many pEquation
+pFragments :: IParser [Fragment]
+pFragments = many pEquation
 
 
 pProgram :: IParser Program
-pProgram = gather <$> pEquations
-  where gather eqs = map gatherName $ unique $ map getName eqs
-          where gatherName name = DefVal (filter (nameIs name) eqs)
-                nameIs name1 (Equation name2 _ _) = name1 == name2
-                getName (Equation name _ _) = name
-
+pProgram = gather <$> pFragments
+  where gather frags = map gatherDefVal names
+          where name (Equation n _ _) = n
+                names = unique $ map name frags
+                gatherDefVal n = DefVal n [ Case pats expr
+                                          | (Equation n2 pats expr) <- frags, n == n2 ]
 
 unique :: (Ord a, Eq a) => [a] -> [a]
 unique = loop []
@@ -137,10 +144,10 @@ test = hspec $ do
     "f x y" `means` (App (App (Var "f") (Var "x")) (Var "y"))
     "f x y" `means` (App (App (Var "f") (Var "x")) (Var "y"))
     "f (x y)" `means` (App (Var "f") (App (Var "x") (Var "y")))
-  describe "pEquations" $ do
-    let means s eqs =
+  describe "pFragments" $ do
+    let means s frags =
           it (prettyLines s) $ do
-            iParse pEquations "example" s `shouldBe` (Right eqs)
+            iParse pFragments "example" s `shouldBe` (Right frags)
     "x = y" `means` [Equation "x" [] (Var "y")]
     "x =\n y" `means` [Equation "x" [] (Var "y")]
     "f = a\ng = b" `means` [Equation "f" [] (Var "a"), Equation "g" [] (Var "b")]
@@ -154,10 +161,10 @@ test = hspec $ do
     let means s prog =
           it (prettyLines s) $ do
             iParse pProgram "example" s `shouldBe` (Right prog)
-    "x = y" `means` [DefVal [Equation "x" [] (Var "y")]]
-    "x = y\nx = z" `means` [DefVal [Equation "x" [] (Var "y"), Equation "x" [] (Var "z")]]
-    "x = y\na = z" `means` [DefVal [Equation "x" [] (Var "y")], DefVal [Equation "a" [] (Var "z")]]
-    "x = y\na = z\nx = q" `means` [ DefVal [ Equation "x" [] (Var "y")
-                                           , Equation "x" [] (Var "q")]
-                                  , DefVal [ Equation "a" [] (Var "z")]]
+    "x = y" `means` [DefVal "x" [Case [] (Var "y")]]
+    "x = y\nx = z" `means` [DefVal "x" [Case [] (Var "y"), Case [] (Var "z")]]
+    "x = y\na = z" `means` [DefVal "x" [Case [] (Var "y")], DefVal "a" [Case [] (Var "z")]]
+    "x = y\na = z\nx = q" `means` [ DefVal "x" [ Case [] (Var "y")
+                                               , Case [] (Var "q")]
+                                  , DefVal "a" [ Case [] (Var "z")]]
 
