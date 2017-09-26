@@ -1,5 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
+module Prototype (testAll) where
+
 import Text.Parsec hiding (State, token)
 import Text.Parsec.Indent
 import Control.Monad.State
@@ -11,7 +13,11 @@ import qualified Data.Map as Map
 
 import Test.Hspec
 
-
+testAll :: IO ()
+testAll = hspec $ do
+  context "testParse" testParse
+  context "testGenConstraints" testGenConstraints
+  
 
 -- data model
 type Program = [Def]
@@ -163,8 +169,8 @@ pProgram :: IParser Program
 pProgram = many pDef
 
 
-testParse :: IO ()
-testParse = hspec $ do
+testParse :: Spec
+testParse = do
   let prettyLines s = (intercalate "\t" (map show $ lines s))
   describe "pExpr" $ do
     let means s e =
@@ -257,8 +263,8 @@ constraints:
 
 -}
 
-testGenConstraints :: IO ()
-testGenConstraints = hspec $ do
+testGenConstraints :: Spec
+testGenConstraints = do
   it "data definition" $ do
     (execWriter (cProgram [DefData "NatList" [ Variant "Empty" []
                                             , Variant "Cons" [T "Nat", T "NatList"]]])
@@ -424,3 +430,19 @@ cExpr env prefix (App f a) = do
          (TyFunc (TyExpression prefixA) (TyExpression prefix))]
   cExpr env prefixF f
   cExpr env prefixA a
+
+
+{-
+
+Constraint solver
+
+TODO:
+- go back and rephrase Ty in terms of explicit "type variables".
+.   - do this by opening a parameter in Type: (Type Void) is concrete types; (Type TyVar) is solver types.
+- define a type-substitution as Map TyVar Type
+
+-}
+
+
+solveTypeConstraints :: [TypeConstraint] -> Either TypeError ()
+solveTypeConstraints = undefined
