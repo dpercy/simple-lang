@@ -8,6 +8,7 @@ import Control.Monad.State
 import Control.Monad.Writer
 
 import Data.List
+import Data.Void
 import Data.Map (Map)
 import qualified Data.Map as Map
 
@@ -20,23 +21,25 @@ testAll = hspec $ do
   
 
 -- data model
-type Program = [Def]
+type Program t = [Def t]
 
--- TODO type parameters
-data Def = DefVal Lowercase Type [Case]
-         | DefData Uppercase [Variant]
-         deriving (Show, Eq)
+data Def t = DefVal Lowercase (Type t) [Case]
+           | DefData Uppercase [Variant]
+           deriving (Show, Eq)
 
 data Case = Case [Pattern] Expr
           deriving (Show, Eq)
 
-data Variant = Variant Uppercase [Type]
+data Variant = Variant Uppercase [Type Void]
              deriving (Show, Eq)
 
-data Type = B -- blank
-          | T Uppercase -- named type
-          | F Type Type -- function type
-          deriving (Show, Eq)
+data Type a = B a -- blank
+            | T Uppercase -- named type
+            | F (Type a) (Type a) -- function type
+            deriving (Show, Eq)
+
+data InferMe = InferMe
+             deriving (Show, Eq)
 
 data Pattern = Hole Lowercase
              | Constructor Uppercase [Pattern]
@@ -121,22 +124,22 @@ pExpr = chainl1 pFactor (return App)
                   <|> (Cst <$> tokUpper)
 
 
-pDefVal :: IParser Def
+pDefVal :: IParser (Def InferMe)
 pDefVal = do
   name <- lookAhead pVar
-  typ <- try (pTypeDecl name) <|> return B
+  typ <- try (pTypeDecl name) <|> return (B InferMe)
   cases <- many1 (pCase name)
   return $ DefVal name typ cases
 
-pTypeDecl :: String -> IParser Type
+pTypeDecl :: String -> IParser (Type t)
 pTypeDecl name = withPos $ do
   pWord name
   void $ token (string "::")
   pType
 
-pType :: IParser Type
+pType :: IParser (Type t)
 pType = chainl1 pFactor (token (string "->") >> return F)
-  where pFactor :: IParser Type
+  where pFactor :: IParser (Type t)
         pFactor = pParens pType
                   <|> (T <$> tokUpper)
         
@@ -150,7 +153,7 @@ pCase name = withPos $ do
   return $ Case pats expr
 
 
-pDefData :: IParser Def
+pDefData :: IParser (Def InferMe)
 pDefData = withPos $ do
   kwData
   typeName <- tokUpper
@@ -161,11 +164,11 @@ pDefData = withPos $ do
           pVariant = Variant <$> tokUpper <*> many pType
 
 
-pDef :: IParser Def
+pDef :: IParser (Def InferMe)
 pDef = pDefData <|> pDefVal
 
 
-pProgram :: IParser Program
+pProgram :: IParser (Program InferMe)
 pProgram = many pDef
 
 
@@ -185,17 +188,17 @@ testParse = do
     let means s prog =
           it (prettyLines s) $ do
             iParse pProgram "example" s `shouldBe` (Right prog)
-    "x = y" `means` [DefVal "x" B [Case [] (Var "y")]]
-    "x = y\nx = z" `means` [DefVal "x" B [Case [] (Var "y"), Case [] (Var "z")]]
-    "x = y\na = z" `means` [DefVal "x" B [Case [] (Var "y")], DefVal "a" B [Case [] (Var "z")]]
+    "x = y" `means` [DefVal "x" (B InferMe) [Case [] (Var "y")]]
+    "x = y\nx = z" `means` [DefVal "x" (B InferMe) [Case [] (Var "y"), Case [] (Var "z")]]
+    "x = y\na = z" `means` [DefVal "x" (B InferMe) [Case [] (Var "y")], DefVal "a" (B InferMe) [Case [] (Var "z")]]
     -- Note this program is invalid because x is defined twice.
-    "x = y\na = z\nx = q" `means` [ DefVal "x" B [ Case [] (Var "y")]
-                                  , DefVal "a" B [ Case [] (Var "z")]
-                                  , DefVal "x" B [ Case [] (Var "q")] ]
+    "x = y\na = z\nx = q" `means` [ DefVal "x" (B InferMe) [ Case [] (Var "y")]
+                                  , DefVal "a" (B InferMe) [ Case [] (Var "z")]
+                                  , DefVal "x" (B InferMe) [ Case [] (Var "q")] ]
 
-    "f x = x" `means` [ DefVal "f" B [ Case [Hole "x"] (Var "x") ]]
-    "f (S x) = x" `means` [ DefVal "f" B [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
-    "f (Cons hd tl) = x" `means` [ DefVal "f" B [ Case [Constructor "Cons" [ Hole "hd"
+    "f x = x" `means` [ DefVal "f" (B InferMe) [ Case [Hole "x"] (Var "x") ]]
+    "f (S x) = x" `means` [ DefVal "f" (B InferMe) [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
+    "f (Cons hd tl) = x" `means` [ DefVal "f" (B InferMe) [ Case [Constructor "Cons" [ Hole "hd"
                                                                          , Hole "tl"]]
                                                 (Var "x") ]]
     "data Nat = O | S Nat" `means` [ DefData "Nat" [ Variant "O" []
@@ -267,82 +270,82 @@ testGenConstraints :: Spec
 testGenConstraints = do
   it "data definition" $ do
     (execWriter (cProgram [DefData "NatList" [ Variant "Empty" []
-                                            , Variant "Cons" [T "Nat", T "NatList"]]])
+                                             , Variant "Cons" [T "Nat", T "NatList"]]])
      `shouldBe`
-     [ TypeEquals (TyDataConstructor "Empty") (TyKnown (T "NatList"))
-     , TypeEquals (TyDataConstructor "Cons") (TyKnown (F (T "Nat")
-                                                       (F (T "NatList")
-                                                        (T "NatList")))) ])
+     [ TypeEquals (B$TyDataConstructor "Empty") (T "NatList")
+     , TypeEquals (B$TyDataConstructor "Cons") (F (T "Nat")
+                                              (F (T "NatList")
+                                               (T "NatList"))) ])
   it "simple value definition" $ do
-    (execWriter (cProgram [DefVal "x" B [Case [] (Cst "Potato")]])
+    (execWriter (cProgram [DefVal "x" (B InferMe) [Case [] (Cst "Potato")]])
      `shouldBe`
-     [ TypeEquals (TyGlobal "x") (TyKnown B)
-     , TypeEquals (TyGlobal "x") (TyExpression "x.case0.expr")
-     , TypeEquals (TyExpression "x.case0.expr") (TyDataConstructor "Potato")
+     [ TypeEquals (B$TyGlobal "x") (B TyInferMe)
+     , TypeEquals (B$TyGlobal "x") (B$TyExpression "x.case0.expr")
+     , TypeEquals (B$TyExpression "x.case0.expr") (B$TyDataConstructor "Potato")
      ])
 
   it "1-arg function" $ do
-    (execWriter (cProgram [DefVal "f" B [ Case [Hole "x"] (Var "x")
-                                        , Case [Hole "x"] (Var "y")]])
+    (execWriter (cProgram [DefVal "f" (B InferMe) [ Case [Hole "x"] (Var "x")
+                                                  , Case [Hole "x"] (Var "y")]])
      `shouldBe`
-     [ TypeEquals (TyGlobal "f") (TyKnown B)
-     , TypeEquals (TyGlobal "f") (TyFunc (TyPattern "f.case0.pat0") (TyExpression "f.case0.expr"))
-     , TypeEquals (TyExpression "f.case0.expr") (TyPattern "f.case0.pat0")
-     , TypeEquals (TyGlobal "f") (TyFunc (TyPattern "f.case1.pat0") (TyExpression "f.case1.expr"))
-     , TypeEquals (TyExpression "f.case1.expr") (TyGlobal "y")
+     [ TypeEquals (B$TyGlobal "f") (B TyInferMe)
+     , TypeEquals (B$TyGlobal "f") (F (B$TyPattern "f.case0.pat0") (B$TyExpression "f.case0.expr"))
+     , TypeEquals (B$TyExpression "f.case0.expr") (B$TyPattern "f.case0.pat0")
+     , TypeEquals (B$TyGlobal "f") (F (B$TyPattern "f.case1.pat0") (B$TyExpression "f.case1.expr"))
+     , TypeEquals (B$TyExpression "f.case1.expr") (B$TyGlobal "y")
      ])
   it "destructuring in a function" $ do
-    (execWriter (cProgram [DefVal "f" B [ Case [Constructor "X" []]
-                                          (Var "x")
-                                        , Case [Constructor "Cons" [Hole "a", Hole "b"]]
-                                          (Var "b")]])
+    (execWriter (cProgram [DefVal "f" (B InferMe) [ Case [Constructor "X" []]
+                                                    (Var "x")
+                                                  , Case [Constructor "Cons" [Hole "a", Hole "b"]]
+                                                    (Var "b")]])
      `shouldBe`
-     [ TypeEquals (TyGlobal "f") (TyKnown B)
+     [ TypeEquals (B$TyGlobal "f") (B TyInferMe)
        -- case0
-     , TypeEquals (TyGlobal "f") (TyFunc (TyPattern "f.case0.pat0")
-                                  (TyExpression "f.case0.expr"))
+     , TypeEquals (B$TyGlobal "f") (F (B$TyPattern "f.case0.pat0")
+                                  (B$TyExpression "f.case0.expr"))
        -- case0 pat0
-     , TypeEquals (TyDataConstructor "X") (TyPattern "f.case0.pat0")
+     , TypeEquals (B$TyDataConstructor "X") (B$TyPattern "f.case0.pat0")
        -- case0 expr
-     , TypeEquals (TyExpression "f.case0.expr") (TyGlobal "x")
+     , TypeEquals (B$TyExpression "f.case0.expr") (B$TyGlobal "x")
        -- case1
-     , TypeEquals (TyGlobal "f") (TyFunc (TyPattern "f.case1.pat0")
-                                  (TyExpression "f.case1.expr"))
+     , TypeEquals (B$TyGlobal "f") (F (B$TyPattern "f.case1.pat0")
+                                  (B$TyExpression "f.case1.expr"))
        -- case1 pat0
-     , TypeEquals (TyDataConstructor "Cons")
-       (TyFunc (TyPattern "f.case1.pat0.arg0")
-                   (TyFunc (TyPattern "f.case1.pat0.arg1")
-                    (TyPattern "f.case1.pat0")))
+     , TypeEquals (B$TyDataConstructor "Cons")
+       (F (B$TyPattern "f.case1.pat0.arg0")
+        (F (B$TyPattern "f.case1.pat0.arg1")
+         (B$TyPattern "f.case1.pat0")))
        -- case1 expr
-     , TypeEquals (TyExpression "f.case1.expr") (TyPattern "f.case1.pat0.arg1")
+     , TypeEquals (B$TyExpression "f.case1.expr") (B$TyPattern "f.case1.pat0.arg1")
      ])
   it "interesting expressions" $ do
-    (execWriter (cProgram [DefVal "x" B [ Case [] (App (App (Cst "Cons") (Var "hd")) (Var "tl"))]])
+    (execWriter (cProgram [DefVal "x" (B InferMe) [ Case [] (App (App (Cst "Cons") (Var "hd")) (Var "tl"))]])
      `shouldBe`
-     [ TypeEquals (TyGlobal "x") (TyKnown B)
-     , TypeEquals (TyGlobal "x") (TyExpression "x.case0.expr")
-     , TypeEquals (TyExpression "x.case0.expr.f")
-       (TyFunc (TyExpression "x.case0.expr.a")
-        (TyExpression "x.case0.expr"))
-     , TypeEquals (TyExpression "x.case0.expr.f.f")
-       (TyFunc (TyExpression "x.case0.expr.f.a")
-        (TyExpression "x.case0.expr.f"))
-     , TypeEquals (TyExpression "x.case0.expr.f.f") (TyDataConstructor "Cons")
-     , TypeEquals (TyExpression "x.case0.expr.f.a") (TyGlobal "hd")
-     , TypeEquals (TyExpression "x.case0.expr.a") (TyGlobal "tl")
+     [ TypeEquals (B$TyGlobal "x") (B TyInferMe)
+     , TypeEquals (B$TyGlobal "x") (B$TyExpression "x.case0.expr")
+     , TypeEquals (B$TyExpression "x.case0.expr.f")
+       (F (B$TyExpression "x.case0.expr.a")
+        (B$TyExpression "x.case0.expr"))
+     , TypeEquals (B$TyExpression "x.case0.expr.f.f")
+       (F (B$TyExpression "x.case0.expr.f.a")
+        (B$TyExpression "x.case0.expr.f"))
+     , TypeEquals (B$TyExpression "x.case0.expr.f.f") (B$TyDataConstructor "Cons")
+     , TypeEquals (B$TyExpression "x.case0.expr.f.a") (B$TyGlobal "hd")
+     , TypeEquals (B$TyExpression "x.case0.expr.a") (B$TyGlobal "tl")
      ])
 
 
-data TypeConstraint = TypeEquals Ty Ty
+data TypeConstraint = TypeEquals (Type TyVar) (Type TyVar)
                     deriving (Show, Eq)
 
-data Ty = TyKnown Type
-        | TyGlobal Lowercase
-        | TyDataConstructor Uppercase 
-        | TyPattern Path
-        | TyExpression Path
-        | TyFunc Ty Ty
-        deriving (Show, Eq)
+-- TODO merge all these cases?
+data TyVar = TyGlobal Lowercase
+           | TyDataConstructor Uppercase 
+           | TyPattern Path
+           | TyExpression Path
+           | TyInferMe
+           deriving (Show, Eq)
 
 type Path = String
 
@@ -350,7 +353,7 @@ type Path = String
 enumerate :: [a] -> [(Int, a)]
 enumerate = zip [0..]
 
-cProgram :: Program -> Writer [TypeConstraint] ()
+cProgram :: (Program InferMe) -> Writer [TypeConstraint] ()
 cProgram defs = forM_ defs $ \def ->
   case def of
    DefVal name ann cases -> cDefVal name ann cases
@@ -360,20 +363,30 @@ cProgram defs = forM_ defs $ \def ->
 cDefData :: Uppercase -> [Variant] -> Writer [TypeConstraint] ()
 cDefData name variants =  forM_ variants $ \(Variant vname fields) ->
   -- data D = Foo A B C  =>  Foo :: A -> (B -> (C -> D))
-  let ty :: Type
-      ty = foldr F (T name) fields
+  let ty :: Type TyVar
+      ty = foldr F (T name) (map tyKnown2 fields)
   in
-  tell [TypeEquals (TyDataConstructor vname) (TyKnown ty)]
+  tell [TypeEquals (B$TyDataConstructor vname) ty]
 
-cDefVal :: Lowercase -> Type -> [Case] -> Writer [TypeConstraint] ()
+tyKnown :: Type InferMe -> Type TyVar
+tyKnown (B InferMe) = B TyInferMe
+tyKnown (T name) = T name
+tyKnown (F t r) = F (tyKnown t) (tyKnown r)
+
+tyKnown2 :: Type Void -> Type TyVar
+tyKnown2 (B nope) = absurd nope
+tyKnown2 (T name) = T name
+tyKnown2 (F t r) = F (tyKnown2 t) (tyKnown2 r)
+
+cDefVal :: Lowercase -> (Type InferMe) -> [Case] -> Writer [TypeConstraint] ()
 cDefVal name ann cases = do
   cDefValAnn name ann
   forM_ (enumerate cases) $ \(idx, case_) ->
     let prefix = name ++ ".case" ++ show idx
     in cDefValCase name prefix case_
 
-cDefValAnn :: Lowercase -> Type -> Writer [TypeConstraint] ()
-cDefValAnn name ann = tell [TypeEquals (TyGlobal name) (TyKnown ann)]
+cDefValAnn :: Lowercase -> (Type InferMe) -> Writer [TypeConstraint] ()
+cDefValAnn name ann = tell [TypeEquals (B$TyGlobal name) (tyKnown ann)]
 
 cDefValCase :: Lowercase -> Path -> Case -> Writer [TypeConstraint] ()
 cDefValCase name prefix (Case pats expr) = do
@@ -382,52 +395,52 @@ cDefValCase name prefix (Case pats expr) = do
   let patNames = flip map (enumerate pats) $ \(idx, _) -> prefix ++ ".pat" ++ show idx
   let exprName = prefix ++ ".expr"
   -- global = pat -> ... -> expr
-  let funTy = foldr TyFunc (TyExpression exprName) (map TyPattern patNames)
-  tell [TypeEquals (TyGlobal name) funTy]
+  let funTy = foldr F (B$TyExpression exprName) (map (B . TyPattern) patNames)
+  tell [TypeEquals (B$TyGlobal name) funTy]
   -- recur pats
   let constraints :: [TypeConstraint]
-      env :: Map Lowercase Ty
+      env :: Map Lowercase (Type TyVar)
       (constraints, env) = execWriter (cPats patNames pats)
   tell constraints
   -- recur expr
   cExpr env exprName expr
 
-cPats :: [Path] -> [Pattern] -> Writer ([TypeConstraint], Map Lowercase Ty) ()
+cPats :: [Path] -> [Pattern] -> Writer ([TypeConstraint], Map Lowercase (Type TyVar)) ()
 cPats prefixes pats = do
   forM_ (zip prefixes pats) $ \(prefix', pat) -> cPat prefix' pat
 
-cPat :: Path -> Pattern -> Writer ([TypeConstraint], Map Lowercase Ty) ()
-cPat prefix (Hole x) = let mapping = (x, (TyPattern prefix))
+cPat :: Path -> Pattern -> Writer ([TypeConstraint], Map Lowercase (Type TyVar)) ()
+cPat prefix (Hole x) = let mapping = (x, (B$TyPattern prefix))
                        in tellEnv (Map.fromList [mapping])
 cPat prefix (Constructor c args) = do
   -- the constructor is a function type that matches the argument types
   let argNames = flip map (enumerate args) $ \(idx, _) -> prefix ++ ".arg" ++ show idx
-  let funty = foldr TyFunc (TyPattern prefix) (map TyPattern argNames)
-  tellConstraints [ TypeEquals (TyDataConstructor c) funty ]
+  let funty = foldr F (B$TyPattern prefix) (map (B . TyPattern) argNames)
+  tellConstraints [ TypeEquals (B$TyDataConstructor c) funty ]
   -- recur into each arg pattern
   forM_ (zip argNames args) $ \(prefix', arg) ->
     cPat prefix' arg
 
 
-tellEnv :: Map Lowercase Ty -> Writer ([TypeConstraint], Map Lowercase Ty) ()
+tellEnv :: Map Lowercase (Type TyVar) -> Writer ([TypeConstraint], Map Lowercase (Type TyVar)) ()
 tellEnv x = tell (mempty, x)
 
-tellConstraints :: [TypeConstraint] -> Writer ([TypeConstraint], Map Lowercase Ty) ()
+tellConstraints :: [TypeConstraint] -> Writer ([TypeConstraint], Map Lowercase (Type TyVar)) ()
 tellConstraints xs = tell (xs, mempty)
   
   
-cExpr :: (Map Lowercase Ty) -> Path -> Expr -> Writer [TypeConstraint] ()
+cExpr :: (Map Lowercase (Type TyVar)) -> Path -> Expr -> Writer [TypeConstraint] ()
 cExpr env prefix (Var x) = case Map.lookup x env of
-  Nothing -> tell [TypeEquals (TyExpression prefix) (TyGlobal x)]
-  Just t -> tell [TypeEquals (TyExpression prefix) t]
-cExpr _env prefix (Cst c) = tell [TypeEquals (TyExpression prefix) (TyDataConstructor c)]
+  Nothing -> tell [TypeEquals (B$TyExpression prefix) (B$TyGlobal x)]
+  Just t -> tell [TypeEquals (B$TyExpression prefix) t]
+cExpr _env prefix (Cst c) = tell [TypeEquals (B$TyExpression prefix) (B$TyDataConstructor c)]
 cExpr env prefix (App f a) = do
   let prefixF = prefix ++ ".f"
   let prefixA = prefix ++ ".a"
   tell [ TypeEquals
          -- f :: a -> result
-         (TyExpression prefixF)
-         (TyFunc (TyExpression prefixA) (TyExpression prefix))]
+         (B$TyExpression prefixF)
+         (F (B$TyExpression prefixA) (B$TyExpression prefix))]
   cExpr env prefixF f
   cExpr env prefixA a
 
@@ -437,12 +450,30 @@ cExpr env prefix (App f a) = do
 Constraint solver
 
 TODO:
-- go back and rephrase Ty in terms of explicit "type variables".
+- DONE go back and rephrase Ty in terms of explicit "type variables".
 .   - do this by opening a parameter in Type: (Type Void) is concrete types; (Type TyVar) is solver types.
+
 - define a type-substitution as Map TyVar Type
 
 -}
 
 
-solveTypeConstraints :: [TypeConstraint] -> Either TypeError ()
+newtype TypeError = TypeError String
+
+type TySubst = Map TyVar (Type TyVar)
+
+solveTypeConstraints :: [TypeConstraint] -> Either TypeError TySubst
 solveTypeConstraints = undefined
+
+
+
+
+testSolveTypeConstraints :: Spec
+testSolveTypeConstraints = do
+  it "no constraints => win" $ do
+    solveTypeConstraints [] `shouldBe` Right Map.empty
+  it "var == constant => win" $ do
+    solveTypeConstraints [TypeEquals (B (TyGlobal "x")) (T "Potato")]
+    `shouldBe` Right (Map.fromList [ (TyGlobal "x", T "Potato") ])
+  it "mismatched types => lose" $ do
+    solveTypeConstraints [TypeEquals (T "A") (T "B")] `shouldBe` Left "cannot unify A with B
