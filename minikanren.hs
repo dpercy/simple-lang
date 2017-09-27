@@ -32,32 +32,13 @@ data Subst term = Subst { substNextfree :: Int
                 deriving (Show)
 
 
--- TODO allow custom data structures instead
-data Term = Var Int
-          | Lit String
-          | Cons Term Term
-          deriving (Show, Eq)
-
-
-instance Unify Term where
-  zipChildren (Var x) (Var y) = if x == y then Just [] else Nothing
-  zipChildren (Lit x) (Lit y) = if x == y then Just [] else Nothing
-  zipChildren (Cons hd tl) (Cons hd' tl') = Just [(hd, hd'), (tl, tl')]
-  zipChildren _ _ = Nothing
-
-  mapChildren f (Cons hd tl) = Cons (f hd) (f tl)
-  mapChildren _ t = t
-
-  injectVar = Var
-  
-  projectVar (Var x) = Just x
-  projectVar _ = Nothing
-
 class Unify term where
   -- return Nothing when something doesn't match.
   -- return Just a list of subterms to unify when constructors do match.
   zipChildren :: term -> term -> Maybe [(term, term)]
   mapChildren :: (term -> term) -> term -> term
+  -- TODO this interface seems to assume that the implementation doesn't use its
+  -- "Var" case for anything else.
   injectVar :: Int -> term
   projectVar :: term -> Maybe Int
 
@@ -175,22 +156,33 @@ instance Monad (Goal term) where
 
 
 
+
+
 {-
+Example type that implements Unify.
 
-Now can this work with custom datatypes?
-Maybe "term" is a second type parameter of Goal.
-You also need a typeclass to define how to unify two terms.
-Hopefully it's a convenient typeclass to write instances for.
-
-
-What properties do terms need?
-- can represent variables
-- check if two nodes have same constructor
-- get children
-^-- 2 and 3 sound like Traversable or Repr or something?
-
-
+TODO can I implement this generically? maybe just with "Data" (the easy version of GHC generics)
 -}
+data Term = Var Int
+          | Lit String
+          | Cons Term Term
+          deriving (Show, Eq)
+
+
+instance Unify Term where
+  zipChildren (Var x) (Var y) = if x == y then Just [] else Nothing
+  zipChildren (Lit x) (Lit y) = if x == y then Just [] else Nothing
+  zipChildren (Cons hd tl) (Cons hd' tl') = Just [(hd, hd'), (tl, tl')]
+  zipChildren _ _ = Nothing
+
+  mapChildren f (Cons hd tl) = Cons (f hd) (f tl)
+  mapChildren _ t = t
+
+  injectVar = Var
+  
+  projectVar (Var x) = Just x
+  projectVar _ = Nothing
+
 
 -- appendo x y xy  iff  x ++ y == xy
 appendo :: Term -> Term -> Term -> Goal Term ()
@@ -205,6 +197,8 @@ appendo x y out =
       out === Cons hd y'
       -- Note we call appendo *last*.
       -- Somehow this prevents infinite recursion?
+      -- TODO this seems bad - is the search not complete?
+      --   - out === cons hd y is actually doing structural recursion on the *output*
       appendo tl y y'
   )
 
