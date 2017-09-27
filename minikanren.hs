@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE ViewPatterns #-}
 
 {-
 
@@ -38,24 +39,45 @@ data Term = Var Int
           deriving (Show, Eq)
 
 
-runGoal :: Goal Term Term -> [Term]
+instance Unify Term where
+  zipChildren (Var x) (Var y) = if x == y then Just [] else Nothing
+  zipChildren (Lit x) (Lit y) = if x == y then Just [] else Nothing
+  zipChildren (Cons hd tl) (Cons hd' tl') = Just [(hd, hd'), (tl, tl')]
+  zipChildren _ _ = Nothing
+
+  mapChildren f (Cons hd tl) = Cons (f hd) (f tl)
+  mapChildren _ t = t
+
+  injectVar = Var
+  
+  projectVar (Var x) = Just x
+  projectVar _ = Nothing
+
+class Unify term where
+  -- return Nothing when something doesn't match.
+  -- return Just a list of subterms to unify when constructors do match.
+  zipChildren :: term -> term -> Maybe [(term, term)]
+  mapChildren :: (term -> term) -> term -> term
+  injectVar :: Int -> term
+  projectVar :: term -> Maybe Int
+
+
+
+runGoal :: Unify term => Goal term term -> [term]
 runGoal (Goal g) = map (\(s, v) -> reify v s) $ g (Subst 0 [])
 
-reify :: Term -> Subst Term -> Term
-reify t s = case walk t s of
-  Lit x -> Lit x
-  Var x -> Var x -- because (walk t s) is not free in s
-  Cons x y -> Cons (reify x s) (reify y s)
+reify :: Unify term => term -> Subst term -> term
+reify t s = mapChildren (flip reify s) (walk t s)
 
 -- true always succeeds, binding no variables.
-true :: Goal Term ()
+true :: Goal term ()
 true = Goal $ \s -> [(s, ())]
 
 succeed :: a -> Goal term a
 succeed v = Goal $ \s -> [(s, v)]
 
 -- false always fails.
-false :: Goal Term ()
+false :: Goal term ()
 false = Goal $ \_ -> []
 
 infixr 2 |||
@@ -97,20 +119,24 @@ bind g h = Goal $ \start ->
   let resultStreams = flip map gSuccesses $ \(s, a) -> unGoal (h a) s
   in foldr interleave [] resultStreams
 
-(===) :: Term -> Term -> Goal Term ()
+(===) :: Unify term => term -> term -> Goal term ()
 (===) t u = Goal $ \subst ->
   case (walk t subst, walk u subst) of
-   (Lit x, Lit y) -> if x == y then [(subst, ())] else []
-   (Var x, u') -> [(extend x u' subst, ())]
-   (t', Var y) -> [(extend y t' subst, ())]
-   (Cons a b, Cons x y) -> unGoal  (a === x &&& b === y) subst
-   (_, _) -> []
+   -- var cases
+   (projectVar -> Just x, u') -> [(extend x u' subst, ())]
+   (t', projectVar -> Just y) -> [(extend y t' subst, ())]
+   -- non-var cases
+   (t', u') -> case zipChildren t' u' of
+     Nothing -> []
+     Just pairs -> unGoal subgoal subst
+       where subgoal = foldr (&&&) true subgoals
+             subgoals = map (uncurry (===)) pairs
 
 -- walk returns either a non-Var, or a var not bound in subst.
 -- (The result can *contain* bound variables, but can't *be* one.)
-walk :: Term -> Subst Term -> Term
-walk (Var x) s = case lookup x (substPairs s) of
-  Nothing -> Var x
+walk :: Unify term => term -> Subst term -> term
+walk (projectVar -> Just x) s = case lookup x (substPairs s) of
+  Nothing -> injectVar x
   Just x' -> walk x' s
 walk t _ = t
 
@@ -121,8 +147,8 @@ extend :: Int -> term -> Subst term -> Subst term
 extend x t s = s { substPairs = (x, t) : substPairs s }
    
 
-fresh :: Goal Term Term
-fresh = Goal $ \(Subst i s) -> [(Subst (i + 1) s, Var i)]
+fresh :: Unify term => Goal term term
+fresh = Goal $ \(Subst i s) -> [(Subst (i + 1) s, injectVar i)]
 
 
 {-
@@ -182,12 +208,17 @@ appendo x y out =
       appendo tl y y'
   )
 
+example :: [Term]
 example = runGoal $ do
   x <- fresh
   y <- fresh
   appendo x y (Cons (Lit "a") (Cons (Lit "b") (Cons (Lit "c") (Lit ""))))
   return x
 
+exampleResult :: [Term]
+exampleResult = [Lit "",Cons (Lit "a") (Lit ""),Cons (Lit "a") (Cons (Lit "b") (Lit "")),Cons (Lit "a") (Cons (Lit "b") (Cons (Lit "c") (Lit "")))]
+
+example2 :: [Term]
 example2 = runGoal $ do
   -- find all lists that contain "david"
   prefix <- fresh
