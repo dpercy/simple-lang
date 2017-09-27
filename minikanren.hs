@@ -23,12 +23,12 @@ guaranteed not to collide with any existing bindings.
 
 -}
 
-newtype Goal a = Goal { unGoal :: Subst -> [(Subst, a)] }
+newtype Goal term a = Goal { unGoal :: Subst term -> [(Subst term, a)] }
 
-data Subst = Subst { substNextfree :: Int
-                   , substPairs :: [(Int, Term)]
-                   }
-           deriving (Show)
+data Subst term = Subst { substNextfree :: Int
+                        , substPairs :: [(Int, term)]
+                        }
+                deriving (Show)
 
 
 -- TODO allow custom data structures instead
@@ -38,24 +38,24 @@ data Term = Var Int
           deriving (Show, Eq)
 
 
-runGoal :: Goal Term -> [Term]
+runGoal :: Goal Term Term -> [Term]
 runGoal (Goal g) = map (\(s, v) -> reify v s) $ g (Subst 0 [])
 
-reify :: Term -> Subst -> Term
+reify :: Term -> Subst Term -> Term
 reify t s = case walk t s of
   Lit x -> Lit x
   Var x -> Var x -- because (walk t s) is not free in s
   Cons x y -> Cons (reify x s) (reify y s)
 
 -- true always succeeds, binding no variables.
-true :: Goal ()
+true :: Goal Term ()
 true = Goal $ \s -> [(s, ())]
 
-succeed :: a -> Goal a
+succeed :: a -> Goal term a
 succeed v = Goal $ \s -> [(s, v)]
 
 -- false always fails.
-false :: Goal ()
+false :: Goal Term ()
 false = Goal $ \_ -> []
 
 infixr 2 |||
@@ -67,7 +67,7 @@ infixl 1 `bind`
 -- "or" succeeds when either goal succeeds.
 -- It's complete: neither stream of results is "starved",
 -- because results are interleaved.
-(|||) :: Goal a -> Goal a -> Goal a
+(|||) :: Goal term a -> Goal term a -> Goal term a
 (|||) (Goal g) (Goal h) = Goal $ \s -> interleave (g s) (h s)
 
 interleave :: [a] -> [a] -> [a]
@@ -80,14 +80,14 @@ interleave (x:xs) ys = x:(interleave ys xs)
 -- If either fails, "and" fails.
 -- The second goal is only run if the first goal succeeded,
 -- and any variables bound by the first goal are in effect for the second goal.
-(&&&) :: Goal () -> Goal () -> Goal ()
+(&&&) :: Goal term () -> Goal term () -> Goal term ()
 (&&&) g h = g `bind` \() -> h
 
 -- "bind" chains goals together.
 -- It runs the first goal.
 -- Then whenever that first goal succeeds, it runs the second goal on the result.
 -- But it interleaves the results so that no subgoal is starved.
-bind :: Goal a -> (a -> Goal b) -> Goal b
+bind :: Goal term a -> (a -> Goal term b) -> Goal term b
 bind g h = Goal $ \start ->
   -- gSuccesses is a possibly-infinite stream.
   let gSuccesses = unGoal g start in
@@ -97,7 +97,7 @@ bind g h = Goal $ \start ->
   let resultStreams = flip map gSuccesses $ \(s, a) -> unGoal (h a) s
   in foldr interleave [] resultStreams
 
-(===) :: Term -> Term -> Goal ()
+(===) :: Term -> Term -> Goal Term ()
 (===) t u = Goal $ \subst ->
   case (walk t subst, walk u subst) of
    (Lit x, Lit y) -> if x == y then [(subst, ())] else []
@@ -108,7 +108,7 @@ bind g h = Goal $ \start ->
 
 -- walk returns either a non-Var, or a var not bound in subst.
 -- (The result can *contain* bound variables, but can't *be* one.)
-walk :: Term -> Subst -> Term
+walk :: Term -> Subst Term -> Term
 walk (Var x) s = case lookup x (substPairs s) of
   Nothing -> Var x
   Just x' -> walk x' s
@@ -117,11 +117,11 @@ walk t _ = t
 -- extend assumes the variable is free in the subst.
 -- it adds a new subst entry.
 -- TODO what if the subst describes infinite values?
-extend :: Int -> Term -> Subst -> Subst
+extend :: Int -> term -> Subst term -> Subst term
 extend x t s = s { substPairs = (x, t) : substPairs s }
    
 
-fresh :: Goal Term
+fresh :: Goal Term Term
 fresh = Goal $ \(Subst i s) -> [(Subst (i + 1) s, Var i)]
 
 
@@ -133,16 +133,71 @@ and returns a fresh variable (a term).
 If a Goal returned a value, it would have to return a value each time it succeeds.
 -}
 
-instance Functor Goal where
+instance Functor (Goal term) where
   fmap f gv = pure f <*> gv
 
-instance Applicative Goal where
+instance Applicative (Goal term) where
   pure = succeed
   (<*>) gf gv = do
     f <- gf
     v <- gv
     return $ f v
   
-instance Monad Goal where
+instance Monad (Goal term) where
   (>>=) = bind
   return = succeed
+
+
+
+{-
+
+Now can this work with custom datatypes?
+Maybe "term" is a second type parameter of Goal.
+You also need a typeclass to define how to unify two terms.
+Hopefully it's a convenient typeclass to write instances for.
+
+
+What properties do terms need?
+- can represent variables
+- check if two nodes have same constructor
+- get children
+^-- 2 and 3 sound like Traversable or Repr or something?
+
+
+-}
+
+-- appendo x y xy  iff  x ++ y == xy
+appendo :: Term -> Term -> Term -> Goal Term ()
+appendo x y out = 
+  (x === Lit "" &&& y === out)
+  |||
+  (do
+      hd <- fresh
+      tl <- fresh
+      y' <- fresh
+      Cons hd tl === x
+      out === Cons hd y'
+      -- Note we call appendo *last*.
+      -- Somehow this prevents infinite recursion?
+      appendo tl y y'
+  )
+
+example = runGoal $ do
+  x <- fresh
+  y <- fresh
+  appendo x y (Cons (Lit "a") (Cons (Lit "b") (Cons (Lit "c") (Lit ""))))
+  return x
+
+example2 = runGoal $ do
+  -- find all lists that contain "david"
+  prefix <- fresh
+  suffix <- fresh
+  total <- fresh
+  mid <- fresh
+  midsuffix <- fresh
+  
+  mid === (Cons (Lit "david") (Lit ""))
+  appendo mid suffix midsuffix
+  appendo prefix midsuffix total
+
+  return total
