@@ -1,6 +1,22 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE ViewPatterns #-}
 
+module MiniKanren (
+  -- top level api
+  Goal,
+  Unify,
+  runGoal,
+  -- goals
+  true,
+  succeed,
+  false,
+  (|||),
+  (&&&),
+  (===),
+  bind,
+  fresh,
+  )where
+
 {-
 
 A "Goal" is something you're trying to prove.
@@ -52,7 +68,7 @@ reify t s = mapChildren (flip reify s) (walk t s)
 
 -- true always succeeds, binding no variables.
 true :: Goal term ()
-true = Goal $ \s -> [(s, ())]
+true = succeed ()
 
 succeed :: a -> Goal term a
 succeed v = Goal $ \s -> [(s, v)]
