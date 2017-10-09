@@ -48,6 +48,10 @@ data Subst term = Subst { substNextfree :: Int
                 deriving (Show)
 
 
+-- TODO some types can be unified but can't represent variables:
+--    - for example, a Def.
+-- TODO ALSO some types can be unified but their children are a different type.
+-- see this? https://github.com/Oregu/featherweight
 class Unify term where
   -- return Nothing when something doesn't match.
   -- return Just a list of subterms to unify when constructors do match.

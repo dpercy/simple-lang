@@ -2,15 +2,14 @@
 
 module Prototype (testAll) where
 
-import Parser
-import TypeChecker
-
 import Test.Hspec
+
+import Parser
+import TypeInference
 
 testAll :: IO ()
 testAll = hspec $ do
   context "testParse" testParse
-  context "testGenConstraints" testGenConstraints
-  context "testSolveTypeConstraints" testSolveTypeConstraints
+  context "testTypeInference" testTypeInference
   
 
