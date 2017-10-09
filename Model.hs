@@ -3,6 +3,9 @@
 module Model where
 
 
+import Test.Hspec
+
+
 -- programs consist of data definitions, and value definitions
 type Program = [Def]
 
@@ -43,3 +46,25 @@ data Expr = Var Lowercase
 type Lowercase = String
 type Uppercase = String
 
+
+typeArguments :: Type -> [Type]
+typeArguments (F a0 ty) = a0:(typeArguments ty)
+typeArguments _ = []
+
+typeFinalResult :: Type -> Type
+typeFinalResult (F _ ty) = typeFinalResult ty
+typeFinalResult ty = ty
+
+makeFunctionType :: [Type] -> Type -> Type
+makeFunctionType args result = foldr F result args
+
+
+testModel :: Spec
+testModel = do
+  it "function arguments and results" $ do
+    let ty = F (T "a") (F (T "b") (T "c"))
+    let args = typeArguments ty
+    let result = typeFinalResult ty
+    args `shouldBe` [T "a", T "b"]
+    result `shouldBe` T "c"
+    makeFunctionType args result `shouldBe` ty
