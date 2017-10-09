@@ -86,22 +86,22 @@ pExpr = chainl1 pFactor (return App)
                   <|> (Cst <$> tokUpper)
 
 
-pDefVal :: IParser (Def InferMe)
+pDefVal :: IParser Def
 pDefVal = do
   name <- lookAhead pVar
-  typ <- try (pTypeDecl name) <|> return (B InferMe)
+  typ <- try (Just <$> pTypeDecl name) <|> return Nothing
   cases <- many1 (pCase name)
   return $ DefVal name typ cases
 
-pTypeDecl :: String -> IParser (Type t)
+pTypeDecl :: String -> IParser Type
 pTypeDecl name = withPos $ do
   pWord name
   void $ token (string "::")
   pType
 
-pType :: IParser (Type t)
+pType :: IParser Type
 pType = chainl1 pFactor (token (string "->") >> return F)
-  where pFactor :: IParser (Type t)
+  where pFactor :: IParser Type
         pFactor = pParens pType
                   <|> (T <$> tokUpper)
         
@@ -115,7 +115,7 @@ pCase name = withPos $ do
   return $ Case pats expr
 
 
-pDefData :: IParser (Def InferMe)
+pDefData :: IParser Def
 pDefData = withPos $ do
   kwData
   typeName <- tokUpper
@@ -126,11 +126,11 @@ pDefData = withPos $ do
           pVariant = Variant <$> tokUpper <*> many pType
 
 
-pDef :: IParser (Def InferMe)
+pDef :: IParser Def
 pDef = pDefData <|> pDefVal
 
 
-pProgram :: IParser (Program InferMe)
+pProgram :: IParser Program
 pProgram = many pDef
 
 
@@ -150,17 +150,17 @@ testParse = do
     let means s prog =
           it (prettyLines s) $ do
             iParse pProgram "example" s `shouldBe` (Right prog)
-    "x = y" `means` [DefVal "x" (B InferMe) [Case [] (Var "y")]]
-    "x = y\nx = z" `means` [DefVal "x" (B InferMe) [Case [] (Var "y"), Case [] (Var "z")]]
-    "x = y\na = z" `means` [DefVal "x" (B InferMe) [Case [] (Var "y")], DefVal "a" (B InferMe) [Case [] (Var "z")]]
+    "x = y" `means` [DefVal "x" Nothing [Case [] (Var "y")]]
+    "x = y\nx = z" `means` [DefVal "x" Nothing [Case [] (Var "y"), Case [] (Var "z")]]
+    "x = y\na = z" `means` [DefVal "x" Nothing [Case [] (Var "y")], DefVal "a" Nothing [Case [] (Var "z")]]
     -- Note this program is invalid because x is defined twice.
-    "x = y\na = z\nx = q" `means` [ DefVal "x" (B InferMe) [ Case [] (Var "y")]
-                                  , DefVal "a" (B InferMe) [ Case [] (Var "z")]
-                                  , DefVal "x" (B InferMe) [ Case [] (Var "q")] ]
+    "x = y\na = z\nx = q" `means` [ DefVal "x" Nothing [ Case [] (Var "y")]
+                                  , DefVal "a" Nothing [ Case [] (Var "z")]
+                                  , DefVal "x" Nothing [ Case [] (Var "q")] ]
 
-    "f x = x" `means` [ DefVal "f" (B InferMe) [ Case [Hole "x"] (Var "x") ]]
-    "f (S x) = x" `means` [ DefVal "f" (B InferMe) [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
-    "f (Cons hd tl) = x" `means` [ DefVal "f" (B InferMe) [ Case [Constructor "Cons" [ Hole "hd"
+    "f x = x" `means` [ DefVal "f" Nothing [ Case [Hole "x"] (Var "x") ]]
+    "f (S x) = x" `means` [ DefVal "f" Nothing [ Case [Constructor "S" [Hole "x"]] (Var "x") ]]
+    "f (Cons hd tl) = x" `means` [ DefVal "f" Nothing [ Case [Constructor "Cons" [ Hole "hd"
                                                                          , Hole "tl"]]
                                                 (Var "x") ]]
     "data Nat = O | S Nat" `means` [ DefData "Nat" [ Variant "O" []
@@ -168,7 +168,7 @@ testParse = do
     "data NatList = Nil | Cons Nat NatList" `means` [ DefData "NatList"
                                                       [ Variant "Nil" []
                                                       , Variant "Cons" [T "Nat", T "NatList"]]]
-    "f :: Int\nf = x" `means` [ DefVal "f" (T "Int") [ Case [] (Var "x") ] ]
-    "f :: A -> B\nf = x" `means` [ DefVal "f" (F (T "A") (T "B")) [ Case [] (Var "x") ] ]
+    "f :: Int\nf = x" `means` [ DefVal "f" (Just (T "Int")) [ Case [] (Var "x") ] ]
+    "f :: A -> B\nf = x" `means` [ DefVal "f" (Just (F (T "A") (T "B"))) [ Case [] (Var "x") ] ]
 
 
