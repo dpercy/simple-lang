@@ -88,6 +88,7 @@ data TypeError = MissingAnnotation { name :: Lowercase }
                                         , expectedType :: Type
                                         , actualType :: Type
                                         }
+               | ContravariantTypeRecursion { typeNames :: [Uppercase] }
                deriving (Show, Eq)
 
 explain :: TypeError -> String
@@ -111,6 +112,8 @@ explain (CallNonFunction { callee, calleeType, argument }) =
 explain (ExpressionTypeMismatch { expression, expectedType, actualType }) =
     "The expression `" ++ show expression ++ "` is supposed to have type " ++ show expectedType
     ++ " but actually has type " ++ show actualType
+explain (ContravariantTypeRecursion { typeNames }) =
+  "These types form a contravariant cycle: " ++ show typeNames
 
 
 type Env = Map String Type

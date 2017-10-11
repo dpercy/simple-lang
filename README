@@ -15,10 +15,12 @@ Total Functional Programming experiment:
 TODO list:
 
 rough implementation:
-- parse and pretty-print some concrete syntax
-    - value definitions as sets of equations
-- totality checker - 3 components:
-    - typechecker (w/ covariant-only type recursion: prevents omega)
+- parsing/printing
+    - DONE parse
+    - pretty-print
+- totality checker - 4 components:
+    - well-formed types checker
+    - typechecker
     - case coverage checker (prevents crashing)
     - termination checker (recursive args must decrease)
 - rewrite-based evaluator
@@ -33,7 +35,8 @@ rough implementation:
 - notebook
     - constantly recompute the type and value of every def (and expr)
     - don't let a bad def prevent you from checking/running other defs
-    -
+        - this means all static checks (typechecking, case coverage, well-founded-recursion)
+	  must mark individual definitions as failed instead of the whole program.
 
 
 - JS evaluator
@@ -42,7 +45,22 @@ rough implementation:
             - every implementation must either match the semantics,
               or fail.
             - failure is not part of the semantics,
-              but an unavoidable part of some machines.
+              but is an unavoidable part of some machines.
+
+
+- make some simple animations and games
+    - try doing FRP (Conal Eliott style), but use Floats...?
+        - proof that rationals aren't enough: (getX (normalize (vec2 1 1))) ==  1/(sqrt 2)
+	- continued fractions probably use too much space
+	- is there a way to use floats but still get the right answer?
+	    - maybe if a number is destined for the screen, precision doesn't matter
+	    - only if a number is destined for some stark comparison (event defined as predicate on behavior)
+	      does it matter to get precisely the right answer
+                - problem is collisions are ubiquitous
+	- OR, make rounding explicit?
+	    - operations like sqrt would return a true "real", which isn't representable on some machines.
+	    - you would explicitly round to the nearest float, or nearest nth continued fraction or whatever.
+	    - algebra would make sense because the explicit rounding would explain why things don't commute, etc.
 
 
 - language features
