@@ -3,8 +3,8 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module CaseCoverage (
-  --checkProgram,
-  --explain,
+  checkProgram,
+  explain,
   testCaseCoverage,
   ) where
 
@@ -164,8 +164,12 @@ subtractPats env (ty:tys) (x:xs) (y:ys) = leftPunch <|> rightPunch
         rightPunch = do
           right <- subtractPats env tys xs ys
           return (x:right)
-
 subtractPats _ _ _ _ = error "uneven rows in subtractPats"
+
+
+subtractPats' :: Env -> [Type] -> Fuzzy [Pattern] -> [Pattern] -> Fuzzy [Pattern]
+subtractPats' env ty fpats0 pats1 = do pats0 <- fpats0
+                                       subtractPats env ty pats0 pats1
 
 
 splitPat :: Env -> Type -> Fuzzy Pattern
@@ -182,3 +186,36 @@ getTypeEnv prog = Map.fromList $ do
   case def of
    DefData tyName variants -> [ (T tyName, variants) ]
    DefVal{} -> []
+
+
+
+data CaseCoverageError = CaseCoverageError { vname :: Lowercase
+                                           , unhandledPatterns :: Fuzzy [Pattern]
+                                           }
+                       deriving (Show, Eq)
+
+explain :: CaseCoverageError -> String
+explain (CaseCoverageError { vname, unhandledPatterns = (Fuzzy unhandledPatterns) }) =
+  "In the definition of " ++ vname ++ ", these cases aren't handled:"
+  ++ unlines (map show unhandledPatterns)
+
+checkProgram :: Program -> Either CaseCoverageError ()
+checkProgram prog = do
+  let env = getTypeEnv prog
+  mapM_ (checkDef env) prog
+
+checkDef :: Env -> Def -> Either CaseCoverageError ()
+checkDef _ (DefData{}) = return ()
+checkDef _ (DefVal _ Nothing _) = error "can't do case coverage on value of unknown type"
+checkDef env (DefVal vname (Just ty) cases) =
+  let arity = length (casePatterns (head cases)) in
+  let argTypes = take arity (typeArguments ty) in
+  let initialInputs = Fuzzy [ take arity (repeat (Hole "_")) ] in
+  let unhandledPatterns = foldl (subtractPats' env argTypes) initialInputs (map casePatterns cases) in
+  case unhandledPatterns of
+   Fuzzy [] -> return ()
+   _ -> Left (CaseCoverageError { vname, unhandledPatterns })
+
+
+casePatterns :: Case -> [Pattern]
+casePatterns (Case pats _) = pats

@@ -19,9 +19,9 @@ rough implementation:
     - DONE parse
     - pretty-print
 - totality checker - 4 components:
-    - well-formed types checker
-    - typechecker
-    - case coverage checker (prevents crashing)
+    - DONE well-formed types checker
+    - DONE typechecker
+    - DONE case coverage checker (prevents crashing)
     - termination checker (recursive args must decrease)
 - rewrite-based evaluator
     - treat defval equations as rewrite rules
