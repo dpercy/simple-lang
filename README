@@ -24,12 +24,28 @@ rough implementation:
     - case coverage checker (prevents crashing)
     - termination checker (recursive args must decrease)
 - rewrite-based evaluator
+    - treat defval equations as rewrite rules
+    - rewriting *anywhere* should be safe, because
+        - nonrecursive functions will simplify in finite time
+	- recursive functions with unknown input will fail to rewrite at some point
+	  (can't apply a rule for (fib (S (S n))) on (fix x) with x unknown)
+
+    - but! functions must step to their return value, not to their body.
+        - that trace step can contain a subtrace to explain that one call
+	- this should be much easier to understand and visualize
+
+    - maybe all visible calls rewrite together? parallel call by value.
+
+- polymorphism
+    - probably touches all layers of the type system
+    - probably doesn't touch the rewrite-evaluator?
 
 
 - trace viewer
     - like "resugaring", except instead of macros we have normal function calls
     - map f [1,2,3]  steps immediately to  [f 1, f 2, f 3]  if we hide map
         - even if map is defined in terms of fold
+    - or
 
 
 - notebook

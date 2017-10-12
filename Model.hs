@@ -27,7 +27,7 @@ data Variant = Variant Uppercase [Type] -- note: no generic containers for now.
 --   - a function type (which contains an argument type and a result type)
 data Type = T Uppercase
           | F Type Type
-          deriving (Show, Eq)
+          deriving (Show, Eq, Ord)
 
 
 --
