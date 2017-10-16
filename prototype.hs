@@ -9,6 +9,7 @@ import Parser
 import TypeCheck
 import WellFormedTypes
 import CaseCoverage
+import Termination
 
 testAll :: IO ()
 testAll = hspec $ do
@@ -17,3 +18,4 @@ testAll = hspec $ do
   context "testTypeCheck" testTypeCheck
   context "testWellFormedTypes" testWellFormedTypes
   context "testCaseCoverage" testCaseCoverage
+  context "testTermination" testTermination
