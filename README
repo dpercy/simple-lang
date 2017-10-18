@@ -51,9 +51,12 @@ rough implementation:
 
 - notebook
     - constantly recompute the type and value of every def (and expr)
+        - better than Jupyter, which requires you to manually re-update cells
     - don't let a bad def prevent you from checking/running other defs
         - this means all static checks (typechecking, case coverage, well-founded-recursion)
-	  must mark individual definitions as failed instead of the whole program.
+	  must mark individual definitions as failed instead of the whole program
+    - easy impl: use CodeMirror's line widgets to display the output below each expr
+        - neat UX because it's just like a repl, only faster and self-updating!
 
 
 - JS evaluator
