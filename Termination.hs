@@ -1,7 +1,10 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE FlexibleInstances #-}
 
 module Termination (
+  checkProgram,
+  testTermination,
   ) where
 
 import Data.Matrix (Matrix)
@@ -10,9 +13,16 @@ import qualified Data.Matrix as Matrix
 import Data.Set (Set)
 import qualified Data.Set as Set
 
+import Data.Map (Map)
+import qualified Data.Map as Map
+
+import qualified Data.Vector as Vector
+
 import Data.Maybe
 
 import Model
+
+import Test.Hspec
 
 
 --import Test.Hspec
@@ -162,12 +172,6 @@ At this point, doing another step doesn't grow the graph at all, so you're done.
 
 -}
 
-example :: Matrix Rel
-example = Matrix.fromLists [
-  [ Uk, Eq ],
-  [ Lt, Uk ]
-  ]
-
 
 converge :: Eq a => (a -> a) -> a -> a
 converge step start = if next == start then start else converge step next
@@ -176,6 +180,19 @@ converge step start = if next == start then start else converge step next
 
 newtype Multigraph v e = Multigraph (Set (v, v, e))
                        deriving (Show, Eq)
+
+merge :: (Ord v, Ord e) => Multigraph v e -> Multigraph v e -> Multigraph v e
+merge (Multigraph x) (Multigraph y) = Multigraph (Set.union x y)
+
+merges :: (Ord v, Ord e) => [Multigraph v e] -> Multigraph v e
+merges = foldr merge (Multigraph Set.empty)
+
+emptyGraph :: Multigraph v e
+emptyGraph = Multigraph Set.empty
+
+singletonGraph :: (v, v, e) -> Multigraph v e
+singletonGraph = Multigraph . Set.singleton
+
 
 extendPaths :: Multigraph Uppercase (Matrix Rel) -> Multigraph Uppercase (Matrix Rel) -> Multigraph Uppercase (Matrix Rel)
 extendPaths (Multigraph orig) (Multigraph g) = Multigraph . Set.fromList $ do
@@ -196,7 +213,198 @@ composeCall (g, h, b) (f, g', a) =
   else Nothing
 
 
+-- "completing" the call graph turns every path into an explicit edge.
 complete :: Multigraph Uppercase (Matrix Rel) -> Multigraph Uppercase (Matrix Rel)
-complete g = converge (extendPaths g) g
+complete g = converge (completeIter g) g
+
+completeIter :: Multigraph Uppercase (Matrix Rel) -> Multigraph Uppercase (Matrix Rel) -> Multigraph Uppercase (Matrix Rel)
+completeIter orig g = (extendPaths orig g) `merge` g
 
 
+recursionBehavior :: Multigraph Uppercase (Matrix Rel) -> Map Uppercase (Set [Rel])
+recursionBehavior (Multigraph graph) =
+  let calls :: [Call]
+      calls = Set.toList graph
+  in Map.fromListWith Set.union $ do
+    (f, g, c) <- calls
+    if f == g
+      then return (f, Set.singleton (Vector.toList (Matrix.getDiag c)))
+      else []
+
+
+-- at the end you check each function, and if you can find a single argument that decreases in *all* self loops, you've proven it.
+data NonterminationError = NonterminationError { name :: Uppercase
+                                               , selfCalls :: Set [Rel]
+                                               }
+                         deriving (Show, Eq)
+
+checkDef :: Map Uppercase (Set [Rel]) -> Def -> Either NonterminationError ()
+checkDef _ (DefData{}) = return ()
+checkDef env (DefVal name _ _) =
+  case Map.lookup name env of
+   Nothing -> return () -- no recursive calls (direct or indirect)
+   Just selfCalls -> if hasDecreasingArg selfCalls
+                     then return ()
+                     else Left (NonterminationError { name, selfCalls })
+
+hasDecreasingArg :: Set [Rel] -> Bool
+hasDecreasingArg calls =
+  if Set.null calls || any null calls
+  then False
+  else if all ((== Lt) . head) calls
+       then True
+       else hasDecreasingArg (Set.map tail calls)
+
+checkProgram :: Program -> Either NonterminationError ()
+checkProgram defs = do
+  let graph = generateGraph defs
+  let env = recursionBehavior (complete graph)
+  mapM_ (checkDef env) defs
+
+
+-- local env maps free a variable to a row:
+-- the row describes how the variable relates to each (positional) parameter.
+data LocalEnv = LocalEnv [Rel] (Map Lowercase [Rel])
+              deriving (Show, Eq)
+
+-- global env maps global variables to arities.
+-- Note arity is defined as the number of patterns on the left-hand side:
+-- not to be confused with the number of arrows in the type.
+type GlobalEnv = Map Lowercase Int
+
+liveVariables :: Pattern -> Map Lowercase Rel
+liveVariables (Hole name) = Map.fromList[(name, Eq)]
+liveVariables (Constructor _ pats) = Map.unions (map (Map.map (const Lt) . liveVariables) pats)
+
+
+makeLocalEnv :: [Pattern] -> LocalEnv
+makeLocalEnv pats = LocalEnv def m
+  where def = map (const Uk) pats
+        m = makeLocalEnvMap pats
+
+makeLocalEnvMap :: [Pattern] -> (Map Lowercase [Rel])
+makeLocalEnvMap pats =
+  let liveSets :: [Map Lowercase Rel]
+      liveSets = map liveVariables pats
+      vars :: [Lowercase]
+      vars = do { live <- liveSets ; Map.keys live }
+  in Map.fromList $ do
+    var <- vars
+    let rels = flip map liveSets $ \live ->
+          case Map.lookup var live of
+           Nothing -> Uk
+           Just rel -> rel
+    return (var, rels)
+
+makeGlobalEnv :: Program -> GlobalEnv
+makeGlobalEnv defs = Map.fromList [ (name, getOnly (unique (map caseArity cases)))
+                                  | (DefVal name _ cases) <- defs
+                                  ]
+
+caseArity :: Case -> Int
+caseArity (Case pats _) = length pats
+
+unique :: Ord a => [a] -> [a]
+unique = Set.toList . Set.fromList
+
+getOnly :: Show a => [a] -> a
+getOnly [] = error "no values"
+getOnly [x] = x
+getOnly xs = error ("several values: " ++ show xs)
+    
+
+
+-- generate the call graph: traverse the program and at every call site
+-- emit an edge that relates the arguments to the parameters.
+generateGraph :: Program -> Multigraph Uppercase (Matrix Rel)
+generateGraph defs = merges (map (genDef genv) defs)
+  where genv = makeGlobalEnv defs
+
+genDef :: GlobalEnv -> Def -> Multigraph Uppercase (Matrix Rel)
+genDef _ (DefData{}) = emptyGraph
+genDef genv (DefVal name ty cases) = merges (map (genCase genv name) cases)
+
+genCase :: GlobalEnv -> Lowercase -> Case -> Multigraph Uppercase (Matrix Rel)
+genCase genv name (Case pats expr) = merges (map (genCall name lenv) calls)
+  where lenv = makeLocalEnv pats
+        calls = findCalls genv expr -- TODO handle shadowing
+
+-- find all calls in an expression.
+-- you need to know the arity of globals to know how many args are in a call.
+findCalls :: GlobalEnv -> Expr -> [(Lowercase, [Expr])]
+findCalls genv e = findCallsWithArgs genv e []
+
+findCallsWithArgs :: GlobalEnv -> Expr -> [Expr] -> [(Lowercase, [Expr])]
+findCallsWithArgs _ (Cst _) _ = []
+findCallsWithArgs genv (App f x) args = findCallsWithArgs genv f (x:args) ++ findCalls genv x
+findCallsWithArgs genv (Var name) args =
+  case Map.lookup name genv of
+   Nothing -> []
+   Just arity -> if arity > length args
+                 then [] -- TODO actually this IS a call, it just has Uk for many params.
+                 else [(name, args)]
+
+-- given a call site, emit a 1-edge call graph.
+genCall :: Lowercase -> LocalEnv -> (Lowercase, [Expr]) -> Multigraph Uppercase (Matrix Rel)
+genCall defname lenv (callee, args) = Multigraph (Set.singleton (defname, callee, mat))
+  where mat = if null args
+              then Matrix.matrix 0 0 undefined
+              else vcats (map (genArg lenv) args)
+
+vcats :: [Matrix a] -> Matrix a
+vcats = foldr1 (Matrix.<->)
+
+row :: [a] -> Matrix a
+row = Matrix.rowVector . Vector.fromList
+
+-- row: how does this arg relate to each param?
+genArg :: LocalEnv -> Expr -> Matrix Rel
+genArg (LocalEnv def _) (App _ _) = row def
+genArg (LocalEnv def _) (Cst _) = row def
+genArg (LocalEnv def m) (Var name) = row (Map.findWithDefault def name m)
+  
+
+testTermination :: Spec
+testTermination = do
+  it "loop fails" $ do
+    checkProgram [
+      DefVal "loop" Nothing [
+         Case [] (Var "loop")
+         ]
+      ] `shouldBe` Left (NonterminationError { name = "loop"
+                                             , selfCalls = Set.fromList [
+                                               -- just one call, no args.
+                                               []
+                                               ]})
+  it "loop0 loop1 fails" $ do
+    checkProgram [
+      DefVal "loop0" Nothing [ Case [] (Var "loop1") ],
+      DefVal "loop1" Nothing [ Case [] (Var "loop0") ]
+      ] `shouldBe` Left (NonterminationError { name = "loop0"
+                                             , selfCalls = Set.fromList [ [] ]})
+  it "length terminates" $ do
+    checkProgram [
+      DefVal "length" Nothing [
+         Case [Constructor "Nil" []] (Cst "Zero"),
+         Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
+                                                           (App (Var "length")
+                                                            (Var "tl")))
+         ]
+      ] `shouldBe` Right ()
+  it "length without base case... is actually OK! (handled by type/case checker)" $ do
+    checkProgram [
+      DefVal "length" Nothing [
+         -- Case [Constructor "Nil" []] (Cst "Zero"),
+         Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
+                                                           (App (Var "length") (Var "tl")))
+         ]
+      ] `shouldBe` Right ()
+  it "map terminates" $ do
+    checkProgram [
+      DefVal "map" Nothing [
+         Case [Hole "f", Constructor "Nil" []] (Cst "Nil"),
+         Case [Hole "f", Constructor "Cons" [Hole "hd", Hole "tl"]]
+         (App (App (Cst "Cons") (App (Var "f") (Var "hd")))
+          (App (App (Var "map") (Var "f")) (Var "tl")))
+         ]
+      ] `shouldBe` Right ()
