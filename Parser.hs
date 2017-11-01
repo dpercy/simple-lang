@@ -23,7 +23,7 @@ type IParser a = ParsecT String () (State SourcePos) a
 
 iParse :: IParser a -> SourceName -> String -> Either ParseError a
 iParse aParser name input =
-    runIndent name (runParserT (spaces >> aParser) () name input)
+    runIndent name (runParserT (do { spaces; v <- aParser; eof; return v }) () name input)
 
 {-
 Make sure to follow the "lexeme" convention:

@@ -24,30 +24,9 @@ rough implementation:
     - DONE case coverage checker (prevents crashing)
     - DONE termination checker (recursive args must decrease)
         - this algo? http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.44.3494&rep=rep1&type=pdf
-- rewrite-based evaluator
+- DONE rewrite-based evaluator
     - treat defval equations as rewrite rules
-    - rewriting *anywhere* should be safe, because
-        - nonrecursive functions will simplify in finite time
-	- recursive functions with unknown input will fail to rewrite at some point
-	  (can't apply a rule for (fib (S (S n))) on (fix x) with x unknown)
-
-    - but! functions must step to their return value, not to their body.
-        - that trace step can contain a subtrace to explain that one call
-	- this should be much easier to understand and visualize
-
-    - maybe all visible calls rewrite together? parallel call by value.
-
-- polymorphism
-    - probably touches all layers of the type system
-    - probably doesn't touch the rewrite-evaluator?
-
-
-- trace viewer
-    - like "resugaring", except instead of macros we have normal function calls
-    - map f [1,2,3]  steps immediately to  [f 1, f 2, f 3]  if we hide map
-        - even if map is defined in terms of fold
-    - or
-
+    - just use uniplate
 
 - notebook
     - constantly recompute the type and value of every def (and expr)
@@ -57,6 +36,24 @@ rough implementation:
 	  must mark individual definitions as failed instead of the whole program
     - easy impl: use CodeMirror's line widgets to display the output below each expr
         - neat UX because it's just like a repl, only faster and self-updating!
+    - use a server :: MixedProgram -> Something
+       where MixedProgram is actually [Either Def Expr]
+       where Something tells you:
+         - line number ranges for each def-or-expr
+	 - which definitions have type errors
+	 - which definitions have a value
+	 - 
+
+- trace viewer
+    - like "resugaring", except instead of macros we have normal function calls
+    - map f [1,2,3]  steps immediately to  [f 1, f 2, f 3]  if we hide map
+        - even if map is defined in terms of fold
+    - or
+
+- polymorphism
+    - probably touches all layers of the type system
+    - probably doesn't touch the rewrite-evaluator?
+
 
 
 - JS evaluator
