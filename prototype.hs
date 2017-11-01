@@ -3,6 +3,7 @@
 module Prototype (testAll, main) where
 
 import Test.Hspec
+import Web.Scotty
 
 import Model
 import Parser
@@ -14,9 +15,10 @@ import Eval
 
 import Text.Parsec (many)
 import Data.Either (partitionEithers)
-import Control.Monad (forM_)
 import System.IO
 import System.Environment
+import Data.String (fromString)
+import Data.ByteString.Lazy.Char8 (unpack)
 
 testAll :: IO ()
 testAll = hspec $ do
@@ -32,26 +34,52 @@ testAll = hspec $ do
 main :: IO ()
 main = do
   args <- getArgs
-  let filename = case args of
-                  [fn] -> fn
-                  _ -> error ("Usage: runghc prototype.hs <filename>; not " ++ show args)
+  case args of
+   ["--serve"] -> runServer
+   [filename] -> runFile filename
+   _ -> error ("Usage: runghc prototype.hs <filename>; not " ++ show args)
+
+runServer :: IO ()
+runServer = do
+  scotty 3000 $ do
+    post (fromString "/") $ do
+      contents <- unpack <$> body
+      case evalProgram "<request>" contents of
+       Left errmsg -> text (fromString errmsg)
+       Right values -> text (fromString (unlines (map show values)))
+
+runContents :: String -> String -> IO ()
+runContents filename contents = do
+  --mapM_ print defsAndExprs
+  --putStrLn ""
+  case evalProgram filename contents of
+   Left errmsg -> error errmsg
+   Right values -> mapM_ print values
+
+
+evalProgram :: String -> String -> Either String [Expr]
+evalProgram filename contents = do
+  let defsAndExprs :: [Either Def Expr]
+      defsAndExprs = case iParse (many pDefOrExpr) filename contents of
+                      Left err -> error (show err)
+                      Right parsed -> parsed
+  let (defs, exprs) = partitionEithers defsAndExprs
+  check defs TypeCheck.checkProgram TypeCheck.explain
+  check defs WellFormedTypes.checkProgram WellFormedTypes.explain
+  check defs CaseCoverage.checkProgram CaseCoverage.explain
+  check defs Termination.checkProgram show
+  Right (map (fullEval defs) exprs)
+
+
+runFile :: String -> IO ()
+runFile filename = do
   withFile filename ReadMode $ \fd -> do
     contents <- hGetContents fd
-    let defsAndExprs :: [Either Def Expr]
-        defsAndExprs = case iParse (many pDefOrExpr) filename contents of
-                        Left err -> error (show err)
-                        Right parsed -> parsed
-    let (defs, exprs) = partitionEithers defsAndExprs
-    check defs TypeCheck.checkProgram TypeCheck.explain
-    check defs WellFormedTypes.checkProgram WellFormedTypes.explain
-    check defs CaseCoverage.checkProgram CaseCoverage.explain
-    check defs Termination.checkProgram show
-    forM_ exprs $ \expr ->
-      print (fullEval defs expr)
+    runContents filename contents
 
-check :: Program -> (Program -> Either err ()) -> (err -> String) -> IO ()
+check :: Program -> (Program -> Either err ()) -> (err -> String) -> Either String ()
 check prog checker explainer = case checker prog of
-  Right () -> return ()
-  Left err -> error (explainer err)
+  Right () -> Right ()
+  Left err -> Left (explainer err)
 
   
