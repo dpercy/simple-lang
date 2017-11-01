@@ -322,7 +322,7 @@ generateGraph defs = merges (map (genDef genv) defs)
 
 genDef :: GlobalEnv -> Def -> Multigraph Uppercase (Matrix Rel)
 genDef _ (DefData{}) = emptyGraph
-genDef genv (DefVal name ty cases) = merges (map (genCase genv name) cases)
+genDef genv (DefVal name _ cases) = merges (map (genCase genv name) cases)
 
 genCase :: GlobalEnv -> Lowercase -> Case -> Multigraph Uppercase (Matrix Rel)
 genCase genv name (Case pats expr) = merges (map (genCall name lenv) calls)
@@ -346,7 +346,7 @@ findCallsWithArgs genv (Var name) args =
 
 -- given a call site, emit a 1-edge call graph.
 genCall :: Lowercase -> LocalEnv -> (Lowercase, [Expr]) -> Multigraph Uppercase (Matrix Rel)
-genCall defname lenv (callee, args) = Multigraph (Set.singleton (defname, callee, mat))
+genCall defname lenv (callee, args) = singletonGraph (defname, callee, mat)
   where mat = if null args
               then Matrix.matrix 0 0 undefined
               else vcats (map (genArg lenv) args)

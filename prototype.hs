@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 
-module Prototype (testAll) where
+module Prototype (testAll, main) where
 
 import Test.Hspec
 
@@ -50,8 +50,8 @@ main = do
       print (fullEval defs expr)
 
 check :: Program -> (Program -> Either err ()) -> (err -> String) -> IO ()
-check prog checkProgram explain = case checkProgram prog of
+check prog checker explainer = case checker prog of
   Right () -> return ()
-  Left err -> error (explain err)
+  Left err -> error (explainer err)
 
   
