@@ -1,0 +1,66 @@
+
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.30.0/codemirror.css">
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: row;
+  }
+  body > .CodeMirror,
+  body > #output {
+    width: 50%;
+    height: 100%;
+    margin: 0;
+  }
+  
+</style>
+
+
+<textarea id="myTextarea">
+
+data Nat = Zero | Succ Nat
+
+one :: Nat
+one = Succ Zero
+
+(one)
+(Succ one)
+(Zero)
+
+
+</textarea>
+<pre id="output">
+</pre>
+
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.30.0/codemirror.js"></script>
+<script>
+  var editor = CodeMirror.fromTextArea(myTextarea, {
+    lineNumbers: true
+  });
+
+  function update() {
+    var contents = editor.getValue();
+    console.log('posting', contents);
+    fetch('/eval', {
+      method: 'POST',
+      body: contents,
+    }).then(response => {
+      response.text().then(text => {
+        console.log('got', text);
+        document.getElementById('output').innerText = text;
+      });
+    });
+  }
+
+  // TODO debounce
+  // TODO show most recent success, even when there's an error
+  // TODO color output to show stale/freshness
+  editor.on('change', update);
+
+  update();
+</script>

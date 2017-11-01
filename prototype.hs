@@ -42,7 +42,10 @@ main = do
 runServer :: IO ()
 runServer = do
   scotty 3000 $ do
-    post (fromString "/") $ do
+    get (fromString "/") $ do
+      setHeader (fromString "Content-Type") (fromString "text/html")
+      file (fromString "ui/notebook.html")
+    post (fromString "/eval") $ do
       contents <- unpack <$> body
       case evalProgram "<request>" contents of
        Left errmsg -> text (fromString errmsg)
