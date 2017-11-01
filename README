@@ -22,7 +22,7 @@ rough implementation:
     - DONE well-formed types checker
     - DONE typechecker
     - DONE case coverage checker (prevents crashing)
-    - termination checker (recursive args must decrease)
+    - DONE termination checker (recursive args must decrease)
         - this algo? http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.44.3494&rep=rep1&type=pdf
 - rewrite-based evaluator
     - treat defval equations as rewrite rules

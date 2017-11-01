@@ -10,6 +10,7 @@ import TypeCheck
 import WellFormedTypes
 import CaseCoverage
 import Termination
+import Eval
 
 testAll :: IO ()
 testAll = hspec $ do
@@ -19,3 +20,4 @@ testAll = hspec $ do
   context "testWellFormedTypes" testWellFormedTypes
   context "testCaseCoverage" testCaseCoverage
   context "testTermination" testTermination
+  context "testEval" testEval
