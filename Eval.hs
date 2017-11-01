@@ -1,9 +1,13 @@
+{-# OPTIONS_GHC -Wall #-}
 module Eval (
   testEval,
   ) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+
+import Data.Generics.Uniplate.Data ()
+import Data.Generics.Uniplate.Operations (rewrite)
 
 import Model
 
@@ -12,15 +16,15 @@ import Test.Hspec
 
 testEval :: Spec
 testEval = do
+  let lengthProg = [
+        DefVal "length" Nothing [
+           Case [Constructor "Nil" []] (Cst "Zero"),
+           Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
+                                                             (App (Var "length")
+                                                              (Var "tl")))
+           ]
+        ]
   it "test some rewrites at root" $ do
-    let lengthProg = [
-          DefVal "length" Nothing [
-             Case [Constructor "Nil" []] (Cst "Zero"),
-             Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
-                                                               (App (Var "length")
-                                                                (Var "tl")))
-             ]
-          ]
     -- no match
     rewriteProgram lengthProg (Var "x") `shouldBe` Nothing
     rewriteProgram lengthProg (Cst "Nil") `shouldBe` Nothing
@@ -36,8 +40,13 @@ testEval = do
     -- rewrites only happen at the root
     rewriteProgram lengthProg (App (Cst "Succ") (App (Var "length") (Cst "Nil")))
       `shouldBe` Nothing
+  it "test fullEval" $ do
+    fullEval lengthProg (App (Var "length") (App (App (Cst "Cons") (Var "x")) (Cst "Nil")))
+      `shouldBe` (App (Cst "Succ") (Cst "Zero"))
 
 
+fullEval :: Program -> Expr -> Expr
+fullEval prog = rewrite (rewriteProgram prog)
 
 -- Each equation in the program is a rewrite rule.
 -- Applying a rewrite rule either fails, or succeeds with a new expression.

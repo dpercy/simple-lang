@@ -1,8 +1,9 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Model where
 
-
+import Data.Data (Data)
 import Test.Hspec
 
 
@@ -41,7 +42,7 @@ data Pattern = Hole Lowercase
 data Expr = Var Lowercase
           | Cst Uppercase
           | App Expr Expr
-          deriving (Show, Eq)
+          deriving (Show, Eq, Data)
 
 type Lowercase = String
 type Uppercase = String
