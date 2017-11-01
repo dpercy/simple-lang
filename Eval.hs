@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 module Eval (
+  fullEval,
   testEval,
   ) where
 

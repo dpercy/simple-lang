@@ -4,6 +4,7 @@ module Parser (
   iParse,
   pProgram,
   pExpr,
+  pDefOrExpr,
   testParse,
   ) where
 
@@ -130,6 +131,10 @@ pDef :: IParser Def
 pDef = pDefData <|> pDefVal
 
 
+pDefOrExpr :: IParser (Either Def Expr)
+pDefOrExpr = (Left <$> try pDef) <|> (Right <$> pExpr)
+
+
 pProgram :: IParser Program
 pProgram = many pDef
 
@@ -170,5 +175,13 @@ testParse = do
                                                       , Variant "Cons" [T "Nat", T "NatList"]]]
     "f :: Int\nf = x" `means` [ DefVal "f" (Just (T "Int")) [ Case [] (Var "x") ] ]
     "f :: A -> B\nf = x" `means` [ DefVal "f" (Just (F (T "A") (T "B"))) [ Case [] (Var "x") ] ]
+  describe "pDefOrExpr" $ do
+    let means s result =
+          it (prettyLines s) $ do
+            iParse pDefOrExpr "example" s `shouldBe` (Right result)
+    "x" `means` Right (Var "x")
+    "f :: Int\nf = x" `means` Left (DefVal "f" (Just (T "Int")) [ Case [] (Var "x") ])
+    "f x" `means` Right (App (Var "f") (Var "x"))
+    "data Foo = MkFoo" `means` Left (DefData "Foo" [ Variant "MkFoo" [] ])
 
 
