@@ -45,6 +45,9 @@ runServer = do
     get (fromString "/") $ do
       setHeader (fromString "Content-Type") (fromString "text/html")
       file (fromString "ui/notebook.html")
+    get (fromString "/codemirror.css") $ file (fromString "ui/vendor/codemirror.css")
+    get (fromString "/codemirror.js") $ file (fromString "ui/vendor/codemirror.js")
+
     post (fromString "/eval") $ do
       contents <- unpack <$> body
       case evalProgram "<request>" contents of
