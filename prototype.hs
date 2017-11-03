@@ -7,6 +7,7 @@ import Web.Scotty
 
 import Model
 import Parser
+import Print
 import TypeCheck
 import WellFormedTypes
 import CaseCoverage
@@ -24,6 +25,7 @@ testAll :: IO ()
 testAll = hspec $ do
   context "testModel" testModel
   context "testParse" testParse
+  context "testPrint" testPrint
   context "testTypeCheck" testTypeCheck
   context "testWellFormedTypes" testWellFormedTypes
   context "testCaseCoverage" testCaseCoverage
@@ -52,7 +54,7 @@ runServer = do
       contents <- unpack <$> body
       case evalProgram "<request>" contents of
        Left errmsg -> text (fromString errmsg)
-       Right values -> text (fromString (unlines (map show values)))
+       Right values -> text (fromString (unlines (map printExpr values)))
 
 runContents :: String -> String -> IO ()
 runContents filename contents = do
@@ -60,7 +62,7 @@ runContents filename contents = do
   --putStrLn ""
   case evalProgram filename contents of
    Left errmsg -> error errmsg
-   Right values -> mapM_ print values
+   Right values -> mapM_ (putStrLn . printExpr) values
 
 
 evalProgram :: String -> String -> Either String [Expr]
