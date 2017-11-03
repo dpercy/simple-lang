@@ -67,10 +67,9 @@ runContents filename contents = do
 
 evalProgram :: String -> String -> Either String [Expr]
 evalProgram filename contents = do
-  let defsAndExprs :: [Either Def Expr]
-      defsAndExprs = case iParse (many pDefOrExpr) filename contents of
-                      Left err -> error (show err)
-                      Right parsed -> parsed
+  defsAndExprs <- case iParse (many pDefOrExpr) filename contents of
+                   Left err -> Left (show err)
+                   Right parsed -> Right parsed
   let (defs, exprs) = partitionEithers defsAndExprs
   check defs TypeCheck.checkProgram TypeCheck.explain
   check defs WellFormedTypes.checkProgram WellFormedTypes.explain
