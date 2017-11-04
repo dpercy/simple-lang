@@ -101,7 +101,7 @@ pTypeDecl name = withPos $ do
   pType
 
 pType :: IParser Type
-pType = chainl1 pFactor (token (string "->") >> return F)
+pType = chainr1 pFactor (token (string "->") >> return F)
   where pFactor :: IParser Type
         pFactor = pParens pType
                   <|> (T <$> tokUpper)
@@ -175,6 +175,7 @@ testParse = do
                                                       , Variant "Cons" [T "Nat", T "NatList"]]]
     "f :: Int\nf = x" `means` [ DefVal "f" (Just (T "Int")) [ Case [] (Var "x") ] ]
     "f :: A -> B\nf = x" `means` [ DefVal "f" (Just (F (T "A") (T "B"))) [ Case [] (Var "x") ] ]
+    "f :: A -> B -> C\nf = x" `means` [ DefVal "f" (Just (F (T "A") (F (T "B") (T "C")))) [ Case [] (Var "x") ] ]
   describe "pDefOrExpr" $ do
     let means s result =
           it (prettyLines s) $ do
