@@ -408,3 +408,12 @@ testTermination = do
           (App (App (Var "map") (Var "f")) (Var "tl")))
          ]
       ] `shouldBe` Right ()
+  it "you can't hide that recursion from me!" $ do
+    checkProgram [
+      DefVal "app" Nothing [ Case [Hole "f"] (Var "f") ],
+      DefVal "loop" Nothing [ Case [Hole "u"] (App (App (Var "app") (Var "loop")) (Var "u")) ]
+      ] `shouldBe` Left (NonterminationError { name = "loop"
+                                             , selfCalls = Set.fromList [
+                                               -- one call, one unknown arg.
+                                               [ Uk ]
+                                               ] })
