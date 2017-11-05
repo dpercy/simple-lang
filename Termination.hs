@@ -331,25 +331,32 @@ genCase genv name (Case pats expr) = merges (map (genCall name lenv) calls)
 
 -- find all calls in an expression.
 -- you need to know the arity of globals to know how many args are in a call.
-findCalls :: GlobalEnv -> Expr -> [(Lowercase, [Expr])]
+findCalls :: GlobalEnv -> Expr -> [(Lowercase, Int, [Expr])]
 findCalls genv e = findCallsWithArgs genv e []
 
-findCallsWithArgs :: GlobalEnv -> Expr -> [Expr] -> [(Lowercase, [Expr])]
+findCallsWithArgs :: GlobalEnv -> Expr -> [Expr] -> [(Lowercase, Int, [Expr])]
 findCallsWithArgs _ (Cst _) _ = []
 findCallsWithArgs genv (App f x) args = findCallsWithArgs genv f (x:args) ++ findCalls genv x
 findCallsWithArgs genv (Var name) args =
   case Map.lookup name genv of
    Nothing -> []
-   Just arity -> if arity > length args
-                 then [] -- TODO actually this IS a call, it just has Uk for many params.
-                 else [(name, args)]
+   -- note the call might be unsaturated
+   Just arity -> [(name, arity, take arity args)]
 
 -- given a call site, emit a 1-edge call graph.
-genCall :: Lowercase -> LocalEnv -> (Lowercase, [Expr]) -> Multigraph Uppercase (Matrix Rel)
-genCall defname lenv (callee, args) = singletonGraph (defname, callee, mat)
-  where mat = if null args
-              then Matrix.matrix 0 0 undefined
-              else vcats (map (genArg lenv) args)
+genCall :: Lowercase -> LocalEnv -> (Lowercase, Int, [Expr]) -> Multigraph Uppercase (Matrix Rel)
+genCall defname lenv (callee, arity, args) = singletonGraph (defname, callee, mat)
+  where
+    -- 1 row per call-site argument
+    -- 1 column per parameter
+    visibleArgsRows = (map (genArg lenv) args)
+    -- The call may not have been saturated, so we need an extra row
+    -- of all Uk to represent the unknown arguments.
+    allRows = take arity (visibleArgsRows ++ repeat (row def))
+      where (LocalEnv def _) = lenv
+    mat = if null allRows
+          then Matrix.matrix 0 0 undefined
+          else vcats allRows
 
 vcats :: [Matrix a] -> Matrix a
 vcats = foldr1 (Matrix.<->)
