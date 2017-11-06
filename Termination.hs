@@ -326,8 +326,12 @@ genDef genv (DefVal name _ cases) = merges (map (genCase genv name) cases)
 
 genCase :: GlobalEnv -> Lowercase -> Case -> Multigraph Uppercase (Matrix Rel)
 genCase genv name (Case pats expr) = merges (map (genCall name lenv) calls)
-  where lenv = makeLocalEnv pats
-        calls = findCalls genv expr -- TODO handle shadowing
+  where lenv@(LocalEnv _ m) = makeLocalEnv pats
+        calls = findCalls genv' expr
+        genv' = deleteKeys (Map.keys m) genv
+
+deleteKeys :: Ord k => [k] -> Map k v -> Map k v
+deleteKeys keys m = foldr Map.delete m keys
 
 -- find all calls in an expression.
 -- you need to know the arity of globals to know how many args are in a call.
@@ -424,3 +428,7 @@ testTermination = do
                                                -- one call, one unknown arg.
                                                [ Uk ]
                                                ] })
+  it "shadowing" $ do
+    checkProgram [
+      DefVal "id" Nothing [ Case [Hole "id"] (Var "id") ]
+      ] `shouldBe` Right ()
