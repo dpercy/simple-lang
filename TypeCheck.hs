@@ -62,6 +62,14 @@ testTypeCheck = do
                                                            , expectedType = (F (T "Nat") (T "Nat"))
                                                            , actualType = (T "Nat")
                                                            })
+  it "shadowing" $ do
+    checkProgram [ DefData "Unit" [Variant "Unit"[]]
+                 , DefVal "id" (Just (F (T "Unit") (T "Unit"))) [
+                      -- id id = id   -- rightmost id refers to the param, not the global.
+                      Case [Hole "id"] (Var "id")
+                      ]
+                 ] `shouldBe` Right ()
+
 
 
 type TC v = Either TypeError v
@@ -124,14 +132,12 @@ typeLookup name env = Map.lookup name env `orFail` Unbound name
 
 checkProgram :: Program -> TC ()
 checkProgram prog =
-  -- TODO distinguish between shadowing-union and noncolliding-union
-  --   - noncolliding union should make a type error for nonlinear patterns or duped globals
-  let env = Map.unions (map scanDef prog) in
+  let env = unions (map scanDef prog) in
   mapM_ (checkDef env) prog
 
 -- returns a partial environment
 scanDef :: Def -> Env
-scanDef (DefData tyname variants) = Map.unions (map (scanVariant tyname) variants)
+scanDef (DefData tyname variants) = unions (map (scanVariant tyname) variants)
 scanDef (DefVal _ Nothing _) = Map.empty
 scanDef (DefVal vname (Just ty) _) = Map.fromList [(vname, ty)]
 
@@ -149,9 +155,16 @@ checkCase name env ty (Case pats expr) = do
   (typedPats, tyExpr) <- (zipPats ty pats
                           `orFail` MissingArgumentType name (length pats) ty)
   binds <- checkPatterns env typedPats
-  -- TODO test that these unions go the right way
-  let env' = Map.union env binds
+  let env' = env `shadowedBy` binds
   checkExprWithType env' expr tyExpr
+
+shadowedBy :: Ord k => Map k v -> Map k v -> Map k v
+shadowedBy = flip Map.union
+
+
+-- TODO unions should return a type error instead when things collide
+unions :: Ord k => [Map k v] -> Map k v
+unions = Map.unionsWith (error "Map key collision")
 
 -- tries to zip the patterns with the function arguments.
 -- will fail if there are more patterns than function arguments.
@@ -164,7 +177,7 @@ zipPats _ (_:_) = Nothing
 
 
 checkPatterns :: Env -> [(Type, Pattern)] -> TC Env
-checkPatterns env typedPats = Map.unions <$> mapM (checkPattern env) typedPats
+checkPatterns env typedPats = unions <$> mapM (checkPattern env) typedPats
 
 -- patterns are checked top-down.
 -- returns a partial environment - only the new bindings
