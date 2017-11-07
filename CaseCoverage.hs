@@ -186,6 +186,7 @@ getTypeEnv prog = Map.fromList $ do
   case def of
    DefData tyName variants -> [ (T tyName, variants) ]
    DefVal{} -> []
+   Expr _ -> []
 
 
 
@@ -205,6 +206,7 @@ checkProgram prog = do
   mapM_ (checkStmt env) prog
 
 checkStmt :: Env -> Stmt -> Either CaseCoverageError ()
+checkStmt _ (Expr _) = return ()
 checkStmt _ (DefData{}) = return ()
 checkStmt _ (DefVal _ Nothing _) = error "can't do case coverage on value of unknown type"
 checkStmt env (DefVal vname (Just ty) cases) =

@@ -4,7 +4,6 @@ module Parser (
   iParse,
   pProgram,
   pExpr,
-  pDefOrExpr,
   testParse,
   ) where
 
@@ -91,7 +90,7 @@ pDefVal :: IParser Stmt
 pDefVal = do
   name <- lookAhead pVar
   typ <- try (Just <$> pTypeDecl name) <|> return Nothing
-  cases <- many1 (pCase name)
+  cases <- many1 (try (pCase name))
   return $ DefVal name typ cases
 
 pTypeDecl :: String -> IParser Type
@@ -128,11 +127,7 @@ pDefData = withPos $ do
 
 
 pStmt :: IParser Stmt
-pStmt = pDefData <|> pDefVal
-
-
-pDefOrExpr :: IParser (Either Stmt Expr)
-pDefOrExpr = (Left <$> try pStmt) <|> (Right <$> pExpr)
+pStmt = pDefData <|> pDefVal <|> (Expr <$> pExpr)
 
 
 pProgram :: IParser Program
@@ -176,13 +171,10 @@ testParse = do
     "f :: Int\nf = x" `means` [ DefVal "f" (Just (T "Int")) [ Case [] (Var "x") ] ]
     "f :: A -> B\nf = x" `means` [ DefVal "f" (Just (F (T "A") (T "B"))) [ Case [] (Var "x") ] ]
     "f :: A -> B -> C\nf = x" `means` [ DefVal "f" (Just (F (T "A") (F (T "B") (T "C")))) [ Case [] (Var "x") ] ]
-  describe "pDefOrExpr" $ do
-    let means s result =
-          it (prettyLines s) $ do
-            iParse pDefOrExpr "example" s `shouldBe` (Right result)
-    "x" `means` Right (Var "x")
-    "f :: Int\nf = x" `means` Left (DefVal "f" (Just (T "Int")) [ Case [] (Var "x") ])
-    "f x" `means` Right (App (Var "f") (Var "x"))
-    "data Foo = MkFoo" `means` Left (DefData "Foo" [ Variant "MkFoo" [] ])
 
+    -- toplevel exprs
+    "x" `means` [Expr (Var "x")]
+    "f x" `means` [Expr (App (Var "f") (Var "x"))]
 
+    -- toplevel expr after its def
+    "x = y\nx" `means` [DefVal "x" Nothing [Case [] (Var "y")], Expr (Var "x")]

@@ -14,8 +14,6 @@ import CaseCoverage
 import Termination
 import Eval
 
-import Text.Parsec (many)
-import Data.Either (partitionEithers)
 import System.IO
 import System.Environment
 import Data.String (fromString)
@@ -52,37 +50,36 @@ runServer = do
 
     post (fromString "/eval") $ do
       contents <- unpack <$> body
-      case evalProgram "<request>" contents of
+      case runProgram "<request>" contents of
        Left errmsg -> text (fromString errmsg)
-       Right values -> text (fromString (unlines (map printExpr values)))
+       Right progDone -> text (fromString (printProgram progDone))
 
-runContents :: String -> String -> IO ()
-runContents filename contents = do
+runFileContents :: String -> String -> IO ()
+runFileContents filename contents = do
   --mapM_ print defsAndExprs
   --putStrLn ""
-  case evalProgram filename contents of
+  case runProgram filename contents of
    Left errmsg -> error errmsg
-   Right values -> mapM_ (putStrLn . printExpr) values
+   Right progDone -> putStrLn (printProgram progDone)
 
 
-evalProgram :: String -> String -> Either String [Expr]
-evalProgram filename contents = do
-  defsAndExprs <- case iParse (many pDefOrExpr) filename contents of
-                   Left err -> Left (show err)
-                   Right parsed -> Right parsed
-  let (defs, exprs) = partitionEithers defsAndExprs
-  check defs TypeCheck.checkProgram TypeCheck.explain
-  check defs WellFormedTypes.checkProgram WellFormedTypes.explain
-  check defs CaseCoverage.checkProgram CaseCoverage.explain
-  check defs Termination.checkProgram show
-  Right (map (fullEval defs) exprs)
+runProgram :: String -> String -> Either String Program
+runProgram filename contents = do
+  prog <- case iParse pProgram filename contents of
+           Left err -> Left (show err)
+           Right parsed -> Right parsed
+  check prog TypeCheck.checkProgram TypeCheck.explain
+  check prog WellFormedTypes.checkProgram WellFormedTypes.explain
+  check prog CaseCoverage.checkProgram CaseCoverage.explain
+  check prog Termination.checkProgram show
+  Right (evalProgram prog)
 
 
 runFile :: String -> IO ()
 runFile filename = do
   withFile filename ReadMode $ \fd -> do
     contents <- hGetContents fd
-    runContents filename contents
+    runFileContents filename contents
 
 check :: Program -> (Program -> Either err ()) -> (err -> String) -> Either String ()
 check prog checker explainer = case checker prog of

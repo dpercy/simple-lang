@@ -2,12 +2,47 @@
 
 module Print (
   testPrint,
-  printExpr
+  printType,
+  printExpr,
+  printProgram
   ) where
 
 import Model
 
+import Data.List (intercalate)
+
 import Test.Hspec
+
+printProgram :: Program -> String
+printProgram stmts = unlines (map printStmt stmts)
+
+printStmt :: Stmt -> String
+printStmt (Expr e) = printExpr e
+printStmt (DefData tyname variants) =
+  "data " ++ tyname ++ " = " ++ (intercalate " | " (map printVariant variants))
+printStmt (DefVal name maybeTy cases) = intercalate "\n" . filter (/= "") $ [
+  printTypeDecl name maybeTy,
+  printCases name cases
+  ]
+
+printTypeDecl :: Lowercase -> Maybe Type -> String
+printTypeDecl name Nothing = name ++ " :: _"
+printTypeDecl name (Just ty) = name ++ " :: " ++ printType ty
+
+printCases :: Lowercase -> [Case] -> String
+printCases name [Case [] e] = name ++ " = " ++ printExpr e
+printCases name _ = name ++ " = ..."
+
+printVariant :: Variant -> String
+printVariant (Variant name args) = name ++ " " ++ unwords (map printTypeArg args)
+
+printType :: Type -> String
+printType (T name) = name
+printType (F inn out) = printTypeArg inn ++ " -> " ++ printType out
+
+printTypeArg :: Type -> String
+printTypeArg (T name) = name
+printTypeArg t = "(" ++ printType t ++ ")"
 
 printExpr :: Expr -> String
 printExpr (Var name) = name

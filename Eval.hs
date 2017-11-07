@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Eval (
-  fullEval,
+  evalExpr,
+  evalProgram,
   testEval,
   ) where
 
@@ -41,13 +42,32 @@ testEval = do
     -- rewrites only happen at the root
     rewriteProgram lengthProg (App (Cst "Succ") (App (Var "length") (Cst "Nil")))
       `shouldBe` Nothing
-  it "test fullEval" $ do
-    fullEval lengthProg (App (Var "length") (App (App (Cst "Cons") (Var "x")) (Cst "Nil")))
+  it "test evalExpr" $ do
+    evalExpr lengthProg (App (Var "length") (App (App (Cst "Cons") (Var "x")) (Cst "Nil")))
       `shouldBe` (App (Cst "Succ") (Cst "Zero"))
 
 
-fullEval :: Program -> Expr -> Expr
-fullEval prog = rewrite (rewriteProgram prog)
+evalExpr :: Program -> Expr -> Expr
+evalExpr prog = rewrite (rewriteProgram prog)
+
+evalProgram :: Program -> Program
+evalProgram prog = mapClosed (evalExpr prog) prog
+
+-- map a function over all closed expressions in the program
+-- (well actually: just stop at any parameter, even if it binds no names.)
+mapClosed :: (Expr -> Expr) -> Program -> Program
+mapClosed f stmts = map (mcStmt f) stmts
+
+mcStmt :: (Expr -> Expr) -> Stmt -> Stmt
+mcStmt f (Expr e) = Expr (f e)
+mcStmt _ def@(DefData{}) = def
+mcStmt f (DefVal name ty cases) = DefVal name ty (map (mcCase f) cases)
+
+mcCase :: (Expr -> Expr) -> Case -> Case
+mcCase f (Case [] expr) = Case [] (f expr)
+mcCase _ c = c
+
+
 
 -- Each equation in the program is a rewrite rule.
 -- Applying a rewrite rule either fails, or succeeds with a new expression.
@@ -74,6 +94,7 @@ rewriteProgram defs = orderedChoices (map rewriteStmt defs)
 
 rewriteStmt :: Stmt -> Rewriter
 rewriteStmt (DefData{}) = rewriteFail
+rewriteStmt (Expr _) = rewriteFail
 rewriteStmt (DefVal name _ cases) = orderedChoices (map (rewriteCase name) cases)
 
 rewriteCase :: Lowercase -> Case -> Rewriter

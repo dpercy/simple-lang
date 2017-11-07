@@ -7,7 +7,7 @@ module TypeCheck (
   testTypeCheck,
   ) where
 
-
+import Control.Monad (void)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Test.Hspec
@@ -140,14 +140,24 @@ scanStmt :: Stmt -> Env
 scanStmt (DefData tyname variants) = unions (map (scanVariant tyname) variants)
 scanStmt (DefVal _ Nothing _) = Map.empty
 scanStmt (DefVal vname (Just ty) _) = Map.fromList [(vname, ty)]
+scanStmt (Expr _) = Map.empty
 
 scanVariant :: Uppercase -> Variant -> Env
 scanVariant tyname (Variant cname argtypes) = Map.fromList [(cname, ctype)]
   where ctype = makeFunctionType argtypes (T tyname)
 
 checkStmt :: Env -> Stmt -> TC ()
-checkStmt _ (DefData _ _) = return ()
-checkStmt _ (DefVal name Nothing _) = Left (MissingAnnotation name)
+-- A defdata introduces no new constraints to check;
+-- we already handled it by creating the env.
+checkStmt _   (DefData _ _) = return ()
+-- An expr we just check bottom-up.
+-- Ditto for un-annotated defs with no params and one case.
+checkStmt env (Expr expr) = void (checkExpr env expr)
+checkStmt env (DefVal _    Nothing [Case [] expr]) = void (checkExpr env expr)
+-- Un-annotated defs in general are not supported yet.
+-- We only do type checking, not type inference.
+checkStmt _   (DefVal name Nothing _) = Left (MissingAnnotation name)
+-- When there is an annotation, check each case against it.
 checkStmt env (DefVal name (Just ty) cases) = mapM_ (checkCase name env ty) cases
 
 checkCase :: String -> Env -> Type -> Case -> TC ()

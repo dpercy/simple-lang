@@ -14,6 +14,7 @@ data Stmt = DefData Uppercase [Variant]
             -- defval's type annotation is optional,
             -- but a simple-minded typechecker might reject you if you omit the type.
           | DefVal Lowercase (Maybe Type) [Case]
+          | Expr Expr
           deriving (Show, Eq)
 
 

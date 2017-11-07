@@ -25,10 +25,19 @@ data Nat = Zero | Succ Nat
 one :: Nat
 one = Succ Zero
 
-(one)
-(Succ one)
-(Zero)
+two :: Nat
+two = Succ one
 
+one
+Succ one
+Zero
+
+
+plus :: Nat -> Nat -> Nat
+plus Zero n = n
+plus (Succ x) n = Succ (plus x n)
+
+plus two two
 
 </textarea>
 <pre id="output">

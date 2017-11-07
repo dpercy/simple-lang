@@ -240,6 +240,8 @@ data NonterminationError = NonterminationError { name :: Uppercase
 
 checkStmt :: Map Uppercase (Set [Rel]) -> Stmt -> Either NonterminationError ()
 checkStmt _ (DefData{}) = return ()
+-- A bare expr can't be recursive because it has no name.
+checkStmt _ (Expr _) = return ()
 checkStmt env (DefVal name _ _) =
   case Map.lookup name env of
    Nothing -> return () -- no recursive calls (direct or indirect)
@@ -322,6 +324,9 @@ generateGraph defs = merges (map (genStmt genv) defs)
 
 genStmt :: GlobalEnv -> Stmt -> Multigraph Uppercase (Matrix Rel)
 genStmt _ (DefData{}) = emptyGraph
+-- The call graph represents calls from one function to another,
+-- so call expressions that occur outside a function definition don't contribute.
+genStmt _ (Expr _) = emptyGraph
 genStmt genv (DefVal name _ cases) = merges (map (genCase genv name) cases)
 
 genCase :: GlobalEnv -> Lowercase -> Case -> Multigraph Uppercase (Matrix Rel)

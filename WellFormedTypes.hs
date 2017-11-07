@@ -133,6 +133,7 @@ checkProgram prog = do
 
 checkContravariantRecursion :: Stmt -> Either MalformedTypeError ()
 checkContravariantRecursion (DefVal{}) = return ()
+checkContravariantRecursion (Expr _) = return ()
 checkContravariantRecursion (DefData tname variants) = mapM_ (checkContra tname) variants
 
 checkContra :: Uppercase -> Variant -> Either MalformedTypeError ()
@@ -178,6 +179,7 @@ getTypedefGraph defs = Map.unionsWith (++) (map tdGraphStmt defs)
 
 tdGraphStmt :: Stmt -> CycleEnv
 tdGraphStmt (DefVal{}) = Map.empty
+tdGraphStmt (Expr _) = Map.empty
 tdGraphStmt (DefData tname variants) = Map.unionsWith (++) (map (tdGraphVariant tname) variants)
 
 tdGraphVariant :: Uppercase -> Variant -> CycleEnv
@@ -188,8 +190,10 @@ tdGraphTy tname (T t) = Map.fromList [(tname, [t])]
 tdGraphTy tname (F inn out) = Map.unionWith (++) (tdGraphTy tname inn) (tdGraphTy tname out)
 
 
-
+-- Every data definition must include a base case.
+-- Otherwise it's impossible to actually construct a value of that type.
 checkBaseCase :: Stmt -> Either MalformedTypeError ()
+checkBaseCase (Expr _) = return ()
 checkBaseCase (DefVal{}) = return ()
 checkBaseCase (DefData tname variants) = if any (not . variantMentions tname) variants
                                          then return ()
