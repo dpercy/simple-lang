@@ -14,7 +14,7 @@ import Data.List (intercalate)
 import Test.Hspec
 
 printProgram :: Program -> String
-printProgram stmts = unlines (map printStmt stmts)
+printProgram stmts = intercalate "\n\n" (map printStmt stmts)
 
 printStmt :: Stmt -> String
 printStmt (Expr e) = printExpr e

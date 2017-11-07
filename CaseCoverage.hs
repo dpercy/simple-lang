@@ -193,12 +193,14 @@ getTypeEnv prog = Map.fromList $ do
 data CaseCoverageError = CaseCoverageError { vname :: Lowercase
                                            , unhandledPatterns :: Fuzzy [Pattern]
                                            }
+                       | MissingTypeAnnotation { vname :: Lowercase }
                        deriving (Show, Eq)
 
 explain :: CaseCoverageError -> String
 explain (CaseCoverageError { vname, unhandledPatterns = (Fuzzy unhandledPatterns) }) =
   "In the definition of " ++ vname ++ ", these cases aren't handled:"
   ++ unlines (map show unhandledPatterns)
+explain (MissingTypeAnnotation vname) = "Can't do case coverage on value with no type annotation: " ++ vname
 
 checkProgram :: Program -> Either CaseCoverageError ()
 checkProgram prog = do
@@ -207,8 +209,9 @@ checkProgram prog = do
 
 checkStmt :: Env -> Stmt -> Either CaseCoverageError ()
 checkStmt _ (Expr _) = return ()
+checkStmt _ (DefVal _ _ [Case [] _]) = return () -- 1 case, 0 args covers all cases.
 checkStmt _ (DefData{}) = return ()
-checkStmt _ (DefVal _ Nothing _) = error "can't do case coverage on value of unknown type"
+checkStmt _ (DefVal vname Nothing _) = Left (MissingTypeAnnotation vname)
 checkStmt env (DefVal vname (Just ty) cases) =
   let arity = length (casePatterns (head cases)) in
   let argTypes = take arity (typeArguments ty) in

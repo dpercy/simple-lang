@@ -105,7 +105,7 @@ explain (MissingArgumentType { valueName, numPatterns, declaredType }) =
   "This equation for " ++ valueName ++ " has " ++ show numPatterns ++ " arguments,"
   ++ " but its type (" ++ show declaredType ++ ")"
   ++ " has " ++ show (length (typeArguments declaredType))
-explain (Unbound { name }) = name ++ " is not defined"
+explain (Unbound { name }) = name ++ " is not defined--or doesn't have an explicit type annotation--sorry! :("
 explain (ConstructorArity { cname, expectedNumArgs, actualNumArgs }) =
   "Constructor `" ++ cname ++ "` should have "
   ++ nargs expectedNumArgs ++ " but has been given " ++ nargs actualNumArgs
