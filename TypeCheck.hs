@@ -132,23 +132,23 @@ typeLookup name env = Map.lookup name env `orFail` Unbound name
 
 checkProgram :: Program -> TC ()
 checkProgram prog =
-  let env = unions (map scanDef prog) in
-  mapM_ (checkDef env) prog
+  let env = unions (map scanStmt prog) in
+  mapM_ (checkStmt env) prog
 
 -- returns a partial environment
-scanDef :: Def -> Env
-scanDef (DefData tyname variants) = unions (map (scanVariant tyname) variants)
-scanDef (DefVal _ Nothing _) = Map.empty
-scanDef (DefVal vname (Just ty) _) = Map.fromList [(vname, ty)]
+scanStmt :: Stmt -> Env
+scanStmt (DefData tyname variants) = unions (map (scanVariant tyname) variants)
+scanStmt (DefVal _ Nothing _) = Map.empty
+scanStmt (DefVal vname (Just ty) _) = Map.fromList [(vname, ty)]
 
 scanVariant :: Uppercase -> Variant -> Env
 scanVariant tyname (Variant cname argtypes) = Map.fromList [(cname, ctype)]
   where ctype = makeFunctionType argtypes (T tyname)
 
-checkDef :: Env -> Def -> TC ()
-checkDef _ (DefData _ _) = return ()
-checkDef _ (DefVal name Nothing _) = Left (MissingAnnotation name)
-checkDef env (DefVal name (Just ty) cases) = mapM_ (checkCase name env ty) cases
+checkStmt :: Env -> Stmt -> TC ()
+checkStmt _ (DefData _ _) = return ()
+checkStmt _ (DefVal name Nothing _) = Left (MissingAnnotation name)
+checkStmt env (DefVal name (Just ty) cases) = mapM_ (checkCase name env ty) cases
 
 checkCase :: String -> Env -> Type -> Case -> TC ()
 checkCase name env ty (Case pats expr) = do

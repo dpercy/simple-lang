@@ -8,13 +8,13 @@ import Test.Hspec
 
 
 -- programs consist of data definitions, and value definitions
-type Program = [Def]
+type Program = [Stmt]
 
-data Def = DefData Uppercase [Variant]
-           -- defval's type annotation is optional,
-           -- but a simple-minded typechecker might reject you if you omit the type.
-         | DefVal Lowercase (Maybe Type) [Case]
-         deriving (Show, Eq)
+data Stmt = DefData Uppercase [Variant]
+            -- defval's type annotation is optional,
+            -- but a simple-minded typechecker might reject you if you omit the type.
+          | DefVal Lowercase (Maybe Type) [Case]
+          deriving (Show, Eq)
 
 
 

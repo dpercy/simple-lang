@@ -87,7 +87,7 @@ pExpr = chainl1 pFactor (return App)
                   <|> (Cst <$> tokUpper)
 
 
-pDefVal :: IParser Def
+pDefVal :: IParser Stmt
 pDefVal = do
   name <- lookAhead pVar
   typ <- try (Just <$> pTypeDecl name) <|> return Nothing
@@ -116,7 +116,7 @@ pCase name = withPos $ do
   return $ Case pats expr
 
 
-pDefData :: IParser Def
+pDefData :: IParser Stmt
 pDefData = withPos $ do
   kwData
   typeName <- tokUpper
@@ -127,16 +127,16 @@ pDefData = withPos $ do
           pVariant = Variant <$> tokUpper <*> many pType
 
 
-pDef :: IParser Def
-pDef = pDefData <|> pDefVal
+pStmt :: IParser Stmt
+pStmt = pDefData <|> pDefVal
 
 
-pDefOrExpr :: IParser (Either Def Expr)
-pDefOrExpr = (Left <$> try pDef) <|> (Right <$> pExpr)
+pDefOrExpr :: IParser (Either Stmt Expr)
+pDefOrExpr = (Left <$> try pStmt) <|> (Right <$> pExpr)
 
 
 pProgram :: IParser Program
-pProgram = many pDef
+pProgram = many pStmt
 
 
 testParse :: Spec

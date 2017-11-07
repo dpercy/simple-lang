@@ -202,12 +202,12 @@ explain (CaseCoverageError { vname, unhandledPatterns = (Fuzzy unhandledPatterns
 checkProgram :: Program -> Either CaseCoverageError ()
 checkProgram prog = do
   let env = getTypeEnv prog
-  mapM_ (checkDef env) prog
+  mapM_ (checkStmt env) prog
 
-checkDef :: Env -> Def -> Either CaseCoverageError ()
-checkDef _ (DefData{}) = return ()
-checkDef _ (DefVal _ Nothing _) = error "can't do case coverage on value of unknown type"
-checkDef env (DefVal vname (Just ty) cases) =
+checkStmt :: Env -> Stmt -> Either CaseCoverageError ()
+checkStmt _ (DefData{}) = return ()
+checkStmt _ (DefVal _ Nothing _) = error "can't do case coverage on value of unknown type"
+checkStmt env (DefVal vname (Just ty) cases) =
   let arity = length (casePatterns (head cases)) in
   let argTypes = take arity (typeArguments ty) in
   let initialInputs = Fuzzy [ take arity (repeat (Hole "_")) ] in

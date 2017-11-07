@@ -238,9 +238,9 @@ data NonterminationError = NonterminationError { name :: Uppercase
                                                }
                          deriving (Show, Eq)
 
-checkDef :: Map Uppercase (Set [Rel]) -> Def -> Either NonterminationError ()
-checkDef _ (DefData{}) = return ()
-checkDef env (DefVal name _ _) =
+checkStmt :: Map Uppercase (Set [Rel]) -> Stmt -> Either NonterminationError ()
+checkStmt _ (DefData{}) = return ()
+checkStmt env (DefVal name _ _) =
   case Map.lookup name env of
    Nothing -> return () -- no recursive calls (direct or indirect)
    Just selfCalls -> if hasDecreasingArg selfCalls
@@ -259,7 +259,7 @@ checkProgram :: Program -> Either NonterminationError ()
 checkProgram defs = do
   let graph = generateGraph defs
   let env = recursionBehavior (complete graph)
-  mapM_ (checkDef env) defs
+  mapM_ (checkStmt env) defs
 
 
 -- local env maps free a variable to a row:
@@ -317,12 +317,12 @@ getOnly xs = error ("several values: " ++ show xs)
 -- generate the call graph: traverse the program and at every call site
 -- emit an edge that relates the arguments to the parameters.
 generateGraph :: Program -> Multigraph Uppercase (Matrix Rel)
-generateGraph defs = merges (map (genDef genv) defs)
+generateGraph defs = merges (map (genStmt genv) defs)
   where genv = makeGlobalEnv defs
 
-genDef :: GlobalEnv -> Def -> Multigraph Uppercase (Matrix Rel)
-genDef _ (DefData{}) = emptyGraph
-genDef genv (DefVal name _ cases) = merges (map (genCase genv name) cases)
+genStmt :: GlobalEnv -> Stmt -> Multigraph Uppercase (Matrix Rel)
+genStmt _ (DefData{}) = emptyGraph
+genStmt genv (DefVal name _ cases) = merges (map (genCase genv name) cases)
 
 genCase :: GlobalEnv -> Lowercase -> Case -> Multigraph Uppercase (Matrix Rel)
 genCase genv name (Case pats expr) = merges (map (genCall name lenv) calls)

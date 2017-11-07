@@ -70,11 +70,11 @@ rlistFromList :: [a] -> RList a
 rlistFromList = foldl Snoc Nope
 
 rewriteProgram :: Program -> Rewriter
-rewriteProgram defs = orderedChoices (map rewriteDef defs)
+rewriteProgram defs = orderedChoices (map rewriteStmt defs)
 
-rewriteDef :: Def -> Rewriter
-rewriteDef (DefData{}) = rewriteFail
-rewriteDef (DefVal name _ cases) = orderedChoices (map (rewriteCase name) cases)
+rewriteStmt :: Stmt -> Rewriter
+rewriteStmt (DefData{}) = rewriteFail
+rewriteStmt (DefVal name _ cases) = orderedChoices (map (rewriteCase name) cases)
 
 rewriteCase :: Lowercase -> Case -> Rewriter
 rewriteCase funcname (Case pats rhs) expr = do

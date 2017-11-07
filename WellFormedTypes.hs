@@ -131,7 +131,7 @@ checkProgram prog = do
   checkCyclicDefs (getTypedefGraph prog)
   mapM_ checkBaseCase prog
 
-checkContravariantRecursion :: Def -> Either MalformedTypeError ()
+checkContravariantRecursion :: Stmt -> Either MalformedTypeError ()
 checkContravariantRecursion (DefVal{}) = return ()
 checkContravariantRecursion (DefData tname variants) = mapM_ (checkContra tname) variants
 
@@ -174,11 +174,11 @@ checkCyclePrefix env seen tyName =
                          (filter (/= tyName) children)
 
 getTypedefGraph :: Program -> CycleEnv
-getTypedefGraph defs = Map.unionsWith (++) (map tdGraphDef defs)
+getTypedefGraph defs = Map.unionsWith (++) (map tdGraphStmt defs)
 
-tdGraphDef :: Def -> CycleEnv
-tdGraphDef (DefVal{}) = Map.empty
-tdGraphDef (DefData tname variants) = Map.unionsWith (++) (map (tdGraphVariant tname) variants)
+tdGraphStmt :: Stmt -> CycleEnv
+tdGraphStmt (DefVal{}) = Map.empty
+tdGraphStmt (DefData tname variants) = Map.unionsWith (++) (map (tdGraphVariant tname) variants)
 
 tdGraphVariant :: Uppercase -> Variant -> CycleEnv
 tdGraphVariant tname (Variant _ argtypes) = Map.unionsWith (++) (map (tdGraphTy tname) argtypes)
@@ -189,7 +189,7 @@ tdGraphTy tname (F inn out) = Map.unionWith (++) (tdGraphTy tname inn) (tdGraphT
 
 
 
-checkBaseCase :: Def -> Either MalformedTypeError ()
+checkBaseCase :: Stmt -> Either MalformedTypeError ()
 checkBaseCase (DefVal{}) = return ()
 checkBaseCase (DefData tname variants) = if any (not . variantMentions tname) variants
                                          then return ()
