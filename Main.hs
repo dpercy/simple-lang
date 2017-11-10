@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 
-module Prototype (testAll, main) where
+module Main (testAll, main) where
 
 import Test.Hspec
 import Web.Scotty

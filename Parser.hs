@@ -9,6 +9,7 @@ module Parser (
 
 
 import Control.Monad.State
+import Control.Monad.Identity
 import Data.List
 import Test.Hspec
 import Text.Parsec hiding (State, token)
@@ -18,11 +19,11 @@ import Model
 
 
 -- parsing
-type IParser a = ParsecT String () (State SourcePos) a
+type IParser a = ParsecT String () (IndentT Identity) a
 
 iParse :: IParser a -> SourceName -> String -> Either ParseError a
 iParse aParser name input =
-    runIndent name (runParserT (do { spaces; v <- aParser; eof; return v }) () name input)
+    runIndent (runParserT (do { spaces; v <- aParser; eof; return v }) () name input)
 
 {-
 Make sure to follow the "lexeme" convention:
@@ -132,7 +133,6 @@ pStmt = pDefData <|> pDefVal <|> (Expr <$> pExpr)
 
 pProgram :: IParser Program
 pProgram = many pStmt
-
 
 testParse :: Spec
 testParse = do
