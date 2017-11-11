@@ -71,10 +71,10 @@ runProgramString filename contents = do
 runProgram :: Program -> Program
 runProgram prog = do
   let prog2 = TypeCheck.checkProgram prog
-  check prog2 WellFormedTypes.checkProgram WellFormedTypes.explain
-  check prog2 CaseCoverage.checkProgram CaseCoverage.explain
-  check prog2 Termination.checkProgram show
-  evalProgram prog2
+  let prog3 = WellFormedTypes.checkProgram prog2
+  --check prog3 CaseCoverage.checkProgram CaseCoverage.explain
+  --check prog3 Termination.checkProgram show
+  evalProgram prog3
 
 
 runFile :: String -> IO ()

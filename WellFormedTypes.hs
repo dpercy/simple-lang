@@ -54,20 +54,26 @@ Although these checks like TypeCheck, they're in a separate pass because:
 testWellFormedTypes :: Spec
 testWellFormedTypes = do
   it "1. no contravariant recursion" $ do
-    checkProgram [ DefData "Unit" [ Variant "Unit" [] ]
-                 ]
-      `shouldBe` Right ()
+    checkProgram [ DefData "Unit" [ Variant "Unit" [] ] ]
+      `shouldBe` [ DefData "Unit" [ Variant "Unit" [] ] ]
     checkProgram [ DefData "Unit" [ Variant "Unit" [] ]
                  , DefData "Hungry" [ Variant "MakeHungry" [(F (T "Hungry") (T "Unit"))] ]
                  ]
-      `shouldBe` Left (ContravariantRecursion "Hungry" (Variant "MakeHungry" [(F (T "Hungry") (T "Unit"))]))
+      `shouldBe` [ DefData "Unit" [ Variant "Unit" [] ]
+                 , Error (explain (ContravariantRecursion "Hungry" (Variant "MakeHungry" [(F (T "Hungry") (T "Unit"))])))
+                 ]
     checkProgram [ DefData "Unit" [ Variant "Unit" [] ]
                  , DefData "WithSelf" [ Variant "WithSelf" [(F (F (T "WithSelf") (T "Unit"))
                                                            (T "Unit"))]
                                      , Variant "BaseCase" []
                                      ]
                  ]
-      `shouldBe` Right ()
+      `shouldBe` [ DefData "Unit" [ Variant "Unit" [] ]
+                 , DefData "WithSelf" [ Variant "WithSelf" [(F (F (T "WithSelf") (T "Unit"))
+                                                             (T "Unit"))]
+                                      , Variant "BaseCase" []
+                                      ]
+                 ]
     checkProgram [ DefData "Unit" [ Variant "Unit" [] ]
                  , DefData "WithSelfTaker" [ Variant "WithSelfTaker" [(F (F (F (T "WithSelfTaker")
                                                                    (T "Unit"))
@@ -76,10 +82,12 @@ testWellFormedTypes = do
                                      , Variant "BaseCase" []
                                      ]
                  ]
-      `shouldBe` Left (ContravariantRecursion "WithSelfTaker"
-                       (Variant "WithSelfTaker" [(F (F (F (T "WithSelfTaker") (T "Unit"))
-                                                    (T "Unit"))
-                                                 (T "Unit"))]))
+      `shouldBe` [ DefData "Unit" [ Variant "Unit" [] ]
+                 , Error (explain (ContravariantRecursion "WithSelfTaker"
+                                   (Variant "WithSelfTaker" [(F (F (F (T "WithSelfTaker") (T "Unit"))
+                                                                 (T "Unit"))
+                                                              (T "Unit"))])))
+                 ]
       
   it "2. no using self as a type argument" $ do
     "TODO" `shouldBe` "need to implement polymorphic types first"
@@ -88,25 +96,28 @@ testWellFormedTypes = do
     checkProgram [ DefData "X" [ Variant "MakeX" [T "Y"] ]
                  , DefData "Y" [ Variant "MakeY" [T "X"] ]
                  ]
-      `shouldBe` Left (CyclicTypeDefs "X" ["Y"])
+      `shouldBe` [ Error (explain (CyclicTypeDefs "X" ["Y"]))
+                 , Error (explain (CyclicTypeDefs "Y" ["X"]))
+                 ]
     checkProgram [ DefData "A" [ Variant "MakeX" [T "B"] ]
                  , DefData "B" [ Variant "MakeY" [T "C"] ]
                  , DefData "C" [ Variant "MakeY" [T "A"] ]
                  ]
-      `shouldBe` Left (CyclicTypeDefs "A" ["B", "C"])
-
-  it "4. base case is required" $ do
-    checkProgram [ DefData "Nat" [ Variant "Succ" [ T "Nat" ]
-                                 ]
+      `shouldBe` [ Error (explain (CyclicTypeDefs "A" ["B", "C"]))
+                 , Error (explain (CyclicTypeDefs "B" ["C", "A"]))
+                 , Error (explain (CyclicTypeDefs "C" ["A", "B"]))
                  ]
-      `shouldBe` Left (MissingBaseCase "Nat")
+  it "4. base case is required" $ do
+    checkProgram [ DefData "Nat" [ Variant "Succ" [ T "Nat" ] ] ]
+      `shouldBe` [ Error (explain (MissingBaseCase "Nat")) ]
 
   it "good example: nat" $ do
     checkProgram [ DefData "Nat" [ Variant "Zero" []
                                  , Variant "Succ" [ T "Nat" ]
-                                 ]
-                 ]
-      `shouldBe` Right ()
+                                 ] ]
+      `shouldBe` [ DefData "Nat" [ Variant "Zero" []
+                                 , Variant "Succ" [ T "Nat" ]
+                                 ] ]
 
 
 data MalformedTypeError = ContravariantRecursion { typeName :: Uppercase
@@ -124,17 +135,23 @@ explain (CyclicTypeDefs { typeName, typeNames }) =
 explain (MissingBaseCase { typeName }) =
   "Type `" ++ typeName ++ "` has no base case"
 
+checkProgram :: Program -> Program
+checkProgram prog =
+  let prog2 = map checkContravariantRecursion prog
+      prog3 = map checkBaseCase prog2
+      prog4 = map (checkCyclicDefs (getTypedefGraph prog3)) prog3
+  in prog4
 
-checkProgram :: Program -> Either MalformedTypeError ()
-checkProgram prog = do
-  mapM_ checkContravariantRecursion prog
-  checkCyclicDefs (getTypedefGraph prog)
-  mapM_ checkBaseCase prog
+recover :: Stmt -> Either MalformedTypeError () -> Stmt
+recover _ (Left err) = Error (explain err)
+recover s (Right ()) = s
 
-checkContravariantRecursion :: Stmt -> Either MalformedTypeError ()
-checkContravariantRecursion (DefVal{}) = return ()
-checkContravariantRecursion (Expr _) = return ()
-checkContravariantRecursion (DefData tname variants) = mapM_ (checkContra tname) variants
+checkContravariantRecursion :: Stmt -> Stmt
+checkContravariantRecursion s@(Error{}) = s
+checkContravariantRecursion s@(DefVal{}) = s
+checkContravariantRecursion s@(Expr _) = s
+checkContravariantRecursion s@(DefData tname variants) =
+  recover s (mapM_ (checkContra tname) variants)
 
 checkContra :: Uppercase -> Variant -> Either MalformedTypeError ()
 checkContra tname v@(Variant _ types) = if any (tyContainsContra tname) types
@@ -155,8 +172,11 @@ tyContainsCov tname (F inn out) = tyContainsContra tname inn || tyContainsCov tn
 type CycleEnv = Map Uppercase [Uppercase]
 
 -- the map tells you: this type is defined in terms of these other types.
-checkCyclicDefs :: CycleEnv -> Either MalformedTypeError ()
-checkCyclicDefs env = mapM_ (checkCycle env) (Map.keys env)
+checkCyclicDefs :: CycleEnv -> Stmt -> Stmt
+checkCyclicDefs env s@(DefData tyName _) = recover s (checkCycle env tyName)
+checkCyclicDefs _   s@(Expr{}) = s
+checkCyclicDefs _   s@(Error{}) = s
+checkCyclicDefs _   s@(DefVal{}) = s
 
 checkCycle :: CycleEnv -> Uppercase -> Either MalformedTypeError ()
 checkCycle env tyName = checkCyclePrefix env [] tyName
@@ -178,6 +198,7 @@ getTypedefGraph :: Program -> CycleEnv
 getTypedefGraph defs = Map.unionsWith (++) (map tdGraphStmt defs)
 
 tdGraphStmt :: Stmt -> CycleEnv
+tdGraphStmt (Error{}) = Map.empty
 tdGraphStmt (DefVal{}) = Map.empty
 tdGraphStmt (Expr _) = Map.empty
 tdGraphStmt (DefData tname variants) = Map.unionsWith (++) (map (tdGraphVariant tname) variants)
@@ -192,12 +213,13 @@ tdGraphTy tname (F inn out) = Map.unionWith (++) (tdGraphTy tname inn) (tdGraphT
 
 -- Every data definition must include a base case.
 -- Otherwise it's impossible to actually construct a value of that type.
-checkBaseCase :: Stmt -> Either MalformedTypeError ()
-checkBaseCase (Expr _) = return ()
-checkBaseCase (DefVal{}) = return ()
-checkBaseCase (DefData tname variants) = if any (not . variantMentions tname) variants
-                                         then return ()
-                                         else Left (MissingBaseCase tname)
+checkBaseCase :: Stmt -> Stmt
+checkBaseCase s@(Expr _) = s
+checkBaseCase s@(Error{}) = s
+checkBaseCase s@(DefVal{}) = s
+checkBaseCase s@(DefData tname variants) = if any (not . variantMentions tname) variants
+                                           then s
+                                           else Error (explain (MissingBaseCase tname))
 
 variantMentions :: Uppercase -> Variant -> Bool
 variantMentions tname (Variant _ args) = any (typeMentions tname) args
