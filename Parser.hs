@@ -23,7 +23,7 @@ type IParser a = ParsecT String () (IndentT Identity) a
 
 iParse :: IParser a -> SourceName -> String -> Either ParseError a
 iParse aParser name input =
-    runIndent (runParserT (do { spaces; v <- aParser; eof; return v }) () name input)
+    runIndentParser (do { spaces; v <- aParser; eof; return v }) () name input
 
 {-
 Make sure to follow the "lexeme" convention:
@@ -39,7 +39,7 @@ into a "tok*" parser that follows this convention.
 -}
 token :: IParser a -> IParser a
 token p = do
-  sameOrIndented
+  --sameOrIndented
   v <- p
   spaces
   return v
@@ -59,8 +59,8 @@ pVar = try $ do v <- tokLower
                 return v
 
 pWord :: String -> IParser ()
-pWord word = try $ do v <- tokLower
-                      void $ guard (v == word)
+pWord word = (try $ do v <- tokLower
+                       guard (v == word))
 
 kwData :: IParser ()
 kwData = pWord "data"
@@ -70,21 +70,23 @@ pParens :: IParser a -> IParser a
 pParens parser = (do void $ token (char '(')
                      e <- parser
                      void $ token (char ')')
-                     return e)
+                     return e) <?> "parens"
 
 
 pPattern :: IParser Pattern
 pPattern = (Hole <$> pVar)
            <|> pParens (Constructor <$> tokUpper <*> many pPattern)
            <|> Constructor <$> tokUpper <*> pure []
+           <?> "pattern"
 
 
 pExpr :: IParser Expr
-pExpr = chainl1 pFactor (return App)
+pExpr = chainl1 pFactor (return App) <?> "expression"
   where pFactor :: IParser Expr
         pFactor = pParens pExpr
                   <|> (Var <$> pVar)
                   <|> (Cst <$> tokUpper)
+                  <?> "factor"
 
 
 pDefVal :: IParser Stmt
@@ -98,7 +100,9 @@ pTypeDecl :: String -> IParser Type
 pTypeDecl name = withPos $ do
   pWord name
   void $ token (string "::")
-  pType
+  ty <- pType
+  void $ token (char ';')
+  return ty
 
 pType :: IParser Type
 pType = chainr1 pFactor (token (string "->") >> return F)
@@ -108,27 +112,34 @@ pType = chainr1 pFactor (token (string "->") >> return F)
         
 
 pCase :: String -> IParser Case
-pCase name = withPos $ do
+pCase name = (<?> "equation") $ withPos $ do
   pWord name
   pats <- many pPattern
   void $ token (char '=')
   expr <- pExpr
+  void $ token (char ';')
   return $ Case pats expr
 
 
 pDefData :: IParser Stmt
-pDefData = withPos $ do
+pDefData = (<?> "data definition") $ withPos $ do
   kwData
   typeName <- tokUpper
   void $ token (char '=')
   variants <- pVariant `sepBy` token (char '|')
+  void $ token (char ';')
   return $ DefData typeName variants
     where pVariant :: IParser Variant
           pVariant = Variant <$> tokUpper <*> many pType
 
+pExprStmt :: IParser Stmt
+pExprStmt = do
+  e <- pExpr
+  void $ token (char ';')
+  return (Expr e)
 
 pStmt :: IParser Stmt
-pStmt = pDefData <|> pDefVal <|> (Expr <$> pExpr)
+pStmt = pDefData <|> pDefVal <|> pExprStmt <?> "statement"
 
 
 pProgram :: IParser Program
