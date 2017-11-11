@@ -39,7 +39,7 @@ into a "tok*" parser that follows this convention.
 -}
 token :: IParser a -> IParser a
 token p = do
-  --sameOrIndented
+  sameOrIndented
   v <- p
   spaces
   return v
@@ -91,7 +91,7 @@ pExpr = chainl1 pFactor (return App) <?> "expression"
 
 pDefVal :: IParser Stmt
 pDefVal = do
-  name <- lookAhead pVar
+  name <- lookAhead (withPos pVar)
   typ <- try (Just <$> pTypeDecl name) <|> return Nothing
   cases <- many1 (try (pCase name))
   return $ DefVal name typ cases
@@ -101,7 +101,6 @@ pTypeDecl name = withPos $ do
   pWord name
   void $ token (string "::")
   ty <- pType
-  void $ token (char ';')
   return ty
 
 pType :: IParser Type
@@ -117,7 +116,6 @@ pCase name = (<?> "equation") $ withPos $ do
   pats <- many pPattern
   void $ token (char '=')
   expr <- pExpr
-  void $ token (char ';')
   return $ Case pats expr
 
 
@@ -127,15 +125,13 @@ pDefData = (<?> "data definition") $ withPos $ do
   typeName <- tokUpper
   void $ token (char '=')
   variants <- pVariant `sepBy` token (char '|')
-  void $ token (char ';')
   return $ DefData typeName variants
     where pVariant :: IParser Variant
           pVariant = Variant <$> tokUpper <*> many pType
 
 pExprStmt :: IParser Stmt
-pExprStmt = do
+pExprStmt = withPos $ do
   e <- pExpr
-  void $ token (char ';')
   return (Expr e)
 
 pStmt :: IParser Stmt

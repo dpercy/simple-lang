@@ -50,7 +50,7 @@ runServer = do
 
     post (fromString "/eval") $ do
       contents <- unpack <$> body
-      case runProgram "<request>" contents of
+      case runProgramString "<request>" contents of
        Left errmsg -> text (fromString errmsg)
        Right progDone -> text (fromString (printProgram progDone))
 
@@ -58,16 +58,20 @@ runFileContents :: String -> String -> IO ()
 runFileContents filename contents = do
   --mapM_ print defsAndExprs
   --putStrLn ""
-  case runProgram filename contents of
+  case runProgramString filename contents of
    Left errmsg -> error errmsg
    Right progDone -> putStrLn (printProgram progDone)
 
-
-runProgram :: String -> String -> Either String Program
-runProgram filename contents = do
+runProgramString :: String -> String -> Either String Program
+runProgramString filename contents = do
   prog <- case iParse pProgram filename contents of
            Left err -> Left (show err)
            Right parsed -> Right parsed
+  ---- runProgram prog
+  return prog
+
+runProgram :: Program -> Either String Program
+runProgram prog = do
   check prog TypeCheck.checkProgram TypeCheck.explain
   check prog WellFormedTypes.checkProgram WellFormedTypes.explain
   check prog CaseCoverage.checkProgram CaseCoverage.explain
