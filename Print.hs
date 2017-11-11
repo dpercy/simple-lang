@@ -34,7 +34,7 @@ printCases name [Case [] e] = name ++ " = " ++ printExpr e
 printCases name _ = name ++ " = ..."
 
 printVariant :: Variant -> String
-printVariant (Variant name args) = name ++ " " ++ unwords (map printTypeArg args)
+printVariant (Variant name args) = unwords (name:(map printTypeArg args))
 
 printType :: Type -> String
 printType (T name) = name
