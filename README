@@ -29,13 +29,16 @@ rough implementation:
     - just use uniplate
 
 - notebook
-    - constantly recompute the type and value of every def (and expr)
+    - DONE constantly recompute the type and value of every def (and expr)
         - better than Jupyter, which requires you to manually re-update cells
-    - don't let a bad def prevent you from checking/running other defs
+
+    - TODO don't let a bad def prevent you from checking/running other defs
         - this means all static checks (typechecking, case coverage, well-founded-recursion)
 	  must mark individual definitions as failed instead of the whole program
+
     - easy impl: use CodeMirror's line widgets to display the output below each expr
         - neat UX because it's just like a repl, only faster and self-updating!
+
     - use a server :: MixedProgram -> Something
        where MixedProgram is actually [Either Def Expr]
        where Something tells you:
@@ -43,13 +46,6 @@ rough implementation:
 	 - which definitions have type errors
 	 - which definitions have a value
 	 -
-  TODO:
-    - add toplevel exprs explicitly to Program
-      - ui test: do bad exprs get type errors? (instead of just failing to rewrite)
-    - parse source locations
-    - include srcloc of each value in server response
-      - and use this info on the client
-    - let intermediate errors invalidate only parts of the program
 
 - trace viewer
     - like "resugaring", except instead of macros we have normal function calls
