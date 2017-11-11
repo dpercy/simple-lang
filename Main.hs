@@ -67,8 +67,7 @@ runProgramString filename contents = do
   prog <- case iParse pProgram filename contents of
            Left err -> Left (show err)
            Right parsed -> Right parsed
-  ---- runProgram prog
-  return prog
+  runProgram prog
 
 runProgram :: Program -> Either String Program
 runProgram prog = do
