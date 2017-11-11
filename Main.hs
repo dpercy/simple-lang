@@ -72,9 +72,9 @@ runProgram :: Program -> Program
 runProgram prog = do
   let prog2 = TypeCheck.checkProgram prog
   let prog3 = WellFormedTypes.checkProgram prog2
-  --check prog3 CaseCoverage.checkProgram CaseCoverage.explain
+  let prog4 = CaseCoverage.checkProgram prog3
   --check prog3 Termination.checkProgram show
-  evalProgram prog3
+  evalProgram prog4
 
 
 runFile :: String -> IO ()

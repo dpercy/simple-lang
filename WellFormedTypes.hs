@@ -12,6 +12,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Test.Hspec
 
+import Util
 import Model
 
 
@@ -127,13 +128,13 @@ data MalformedTypeError = ContravariantRecursion { typeName :: Uppercase
                         | MissingBaseCase { typeName :: Uppercase }
                         deriving (Show, Eq)
 
-explain :: MalformedTypeError -> String
-explain (ContravariantRecursion { typeName, variant }) =
-  "Type `" ++ typeName ++ "` refers to itself in a contravariant position in " ++ show variant
-explain (CyclicTypeDefs { typeName, typeNames }) =
-  "Type `" ++ typeName ++ "` is defined in terms of itself; the cycle is " ++ show typeNames
-explain (MissingBaseCase { typeName }) =
-  "Type `" ++ typeName ++ "` has no base case"
+instance Explain MalformedTypeError where
+  explain (ContravariantRecursion { typeName, variant }) =
+    "Type `" ++ typeName ++ "` refers to itself in a contravariant position in " ++ show variant
+  explain (CyclicTypeDefs { typeName, typeNames }) =
+    "Type `" ++ typeName ++ "` is defined in terms of itself; the cycle is " ++ show typeNames
+  explain (MissingBaseCase { typeName }) =
+    "Type `" ++ typeName ++ "` has no base case"
 
 checkProgram :: Program -> Program
 checkProgram prog =
@@ -141,10 +142,6 @@ checkProgram prog =
       prog3 = map checkBaseCase prog2
       prog4 = map (checkCyclicDefs (getTypedefGraph prog3)) prog3
   in prog4
-
-recover :: Stmt -> Either MalformedTypeError () -> Stmt
-recover _ (Left err) = Error (explain err)
-recover s (Right ()) = s
 
 checkContravariantRecursion :: Stmt -> Stmt
 checkContravariantRecursion s@(Error{}) = s

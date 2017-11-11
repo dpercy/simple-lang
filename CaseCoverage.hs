@@ -14,6 +14,7 @@ import qualified Data.Map as Map
 import Control.Applicative
 import Test.Hspec
 
+import Util
 import Model
 
 
@@ -196,16 +197,18 @@ data CaseCoverageError = CaseCoverageError { vname :: Lowercase
                        | MissingTypeAnnotation { vname :: Lowercase }
                        deriving (Show, Eq)
 
-explain :: CaseCoverageError -> String
-explain (CaseCoverageError { vname, unhandledPatterns = (Fuzzy unhandledPatterns) }) =
-  "In the definition of " ++ vname ++ ", these cases aren't handled:"
-  ++ unlines (map show unhandledPatterns)
-explain (MissingTypeAnnotation vname) = "Can't do case coverage on value with no type annotation: " ++ vname
+instance Explain CaseCoverageError where
+  explain (CaseCoverageError { vname, unhandledPatterns = (Fuzzy unhandledPatterns) }) =
+    "In the definition of " ++ vname ++ ", these cases aren't handled:"
+    ++ unlines (map show unhandledPatterns)
+  explain (MissingTypeAnnotation vname) =
+    "Can't do case coverage on value with no type annotation: " ++ vname
 
-checkProgram :: Program -> Either CaseCoverageError ()
-checkProgram prog = do
-  let env = getTypeEnv prog
-  mapM_ (checkStmt env) prog
+checkProgram :: Program -> Program
+checkProgram prog = map (checkStmtRecover (getTypeEnv prog)) prog
+
+checkStmtRecover :: Env -> Stmt -> Stmt
+checkStmtRecover env s = recover s (checkStmt env s)
 
 checkStmt :: Env -> Stmt -> Either CaseCoverageError ()
 checkStmt _ (Expr _) = return ()

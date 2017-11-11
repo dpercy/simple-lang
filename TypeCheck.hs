@@ -98,29 +98,30 @@ data TypeError = MissingAnnotation { name :: Lowercase }
                | ContravariantTypeRecursion { typeNames :: [Uppercase] }
                deriving (Show, Eq)
 
-explain :: TypeError -> String
-explain (MissingAnnotation { name }) = "You need to write a type annotation for " ++ name
-explain (MissingArgumentType { valueName, numPatterns, declaredType }) =
-  "This equation for " ++ valueName ++ " has " ++ show numPatterns ++ " arguments,"
-  ++ " but its type (" ++ show declaredType ++ ")"
-  ++ " has " ++ show (length (typeArguments declaredType))
-explain (Unbound { name }) = name ++ " is not defined--or doesn't have an explicit type annotation--sorry! :("
-explain (ConstructorArity { cname, expectedNumArgs, actualNumArgs }) =
-  "Constructor `" ++ cname ++ "` should have "
-  ++ nargs expectedNumArgs ++ " but has been given " ++ nargs actualNumArgs
-  where nargs 1 = "1 argument"
-        nargs n = show n ++ " arguments"
-explain (PatternTypeMismatch { pattern, expectedType, actualType }) =
-  "The pattern `" ++ show pattern ++ "` is supposed to have type " ++ show expectedType
-  ++ " but actually has type " ++ show actualType
-explain (CallNonFunction { callee, calleeType, argument }) =
-  "You tried to apply `" ++ show callee ++ "` to `" ++ show argument
-  ++ " but the callee is not a function; it has type " ++ show calleeType
-explain (ExpressionTypeMismatch { expression, expectedType, actualType }) =
+instance Explain TypeError where
+  explain (MissingAnnotation { name }) = "You need to write a type annotation for " ++ name
+  explain (MissingArgumentType { valueName, numPatterns, declaredType }) =
+    "This equation for " ++ valueName ++ " has " ++ show numPatterns ++ " arguments,"
+    ++ " but its type (" ++ show declaredType ++ ")"
+    ++ " has " ++ show (length (typeArguments declaredType))
+  explain (Unbound { name }) =
+    name ++ " is not defined--or doesn't have an explicit type annotation--sorry! :("
+  explain (ConstructorArity { cname, expectedNumArgs, actualNumArgs }) =
+    "Constructor `" ++ cname ++ "` should have "
+    ++ nargs expectedNumArgs ++ " but has been given " ++ nargs actualNumArgs
+    where nargs 1 = "1 argument"
+          nargs n = show n ++ " arguments"
+  explain (PatternTypeMismatch { pattern, expectedType, actualType }) =
+    "The pattern `" ++ show pattern ++ "` is supposed to have type " ++ show expectedType
+    ++ " but actually has type " ++ show actualType
+  explain (CallNonFunction { callee, calleeType, argument }) =
+    "You tried to apply `" ++ show callee ++ "` to `" ++ show argument
+    ++ " but the callee is not a function; it has type " ++ show calleeType
+  explain (ExpressionTypeMismatch { expression, expectedType, actualType }) =
     "The expression `" ++ show expression ++ "` is supposed to have type " ++ show expectedType
     ++ " but actually has type " ++ show actualType
-explain (ContravariantTypeRecursion { typeNames }) =
-  "These types form a contravariant cycle: " ++ show typeNames
+  explain (ContravariantTypeRecursion { typeNames }) =
+    "These types form a contravariant cycle: " ++ show typeNames
 
 
 type Env = Map String Type
