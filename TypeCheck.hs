@@ -12,63 +12,62 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Test.Hspec
 
+import Util
 import Model
 
 
 testTypeCheck :: Spec
 testTypeCheck = do
+  let natDef = DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
+  let twoDef = DefVal "two" (Just (T "Nat")) [
+        Case [] (App (Cst "S")  (App (Cst "S")  (App (Cst "S") (Cst "Z"))))]
+  let plusDef = DefVal "plus" (Just (F (T "Nat") (F (T "Nat") (T "Nat")))) [
+        Case [Constructor "Z" [], Hole "y"] (Var "y"),
+        Case [Constructor "S" [Hole "x"], Hole "y"] (App (Cst "S")
+                                                     (App (App (Var "plus")
+                                                           (Var "x"))
+                                                      (Var "y")))
+        ]
   it "nats example" $ do
-    checkProgram [ DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
-                 , DefVal "two" (Just (T "Nat")) [
-                      Case [] (App (Cst "S")  (App (Cst "S")  (App (Cst "S") (Cst "Z"))))
-                      ]
-                 , DefVal "plus" (Just (F (T "Nat") (F (T "Nat") (T "Nat")))) [
-                      Case [Constructor "Z" [], Hole "y"] (Var "y"),
-                      Case [Constructor "S" [Hole "x"], Hole "y"] (App (Cst "S")
-                                                                   (App (App (Var "plus")
-                                                                         (Var "x"))
-                                                                    (Var "y")))
-                      ]
-                 ] `shouldBe` Right ()
+    checkProgram [natDef, twoDef, plusDef] `shouldBe` [natDef, twoDef, plusDef]
   it "missing arg type" $ do
-    checkProgram [ DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
-                 , DefVal "two" (Just (T "Nat")) [
-                      Case [] (App (Cst "S")  (App (Cst "S")  (App (Cst "S") (Cst "Z"))))
-                      ]
-                 , DefVal "plus" (Just (F (T "Nat") (T "Nat"))) [
-                      Case [Constructor "Z" [], Hole "y"] (Var "y"),
-                      Case [Constructor "S" [Hole "x"], Hole "y"] (App (Cst "S")
-                                                                   (App (App (Var "plus")
-                                                                         (Var "x"))
-                                                                    (Var "y")))
-                      ]
-                 ] `shouldBe` Left (MissingArgumentType { valueName = "plus"
-                                                        , numPatterns = 2
-                                                        , declaredType = (F (T "Nat") (T "Nat"))
-                                                        })
+    let plusDefWrong = DefVal "plus" (Just (F (T "Nat") (T "Nat"))) [
+          --                         ^-- should be Nat -> Nat -> Nat, 2 args.
+          Case [Constructor "Z" [], Hole "y"] (Var "y"),
+          Case [Constructor "S" [Hole "x"], Hole "y"] (App (Cst "S")
+                                                       (App (App (Var "plus")
+                                                             (Var "x"))
+                                                        (Var "y")))
+          ]
+    let err = MissingArgumentType { valueName = "plus"
+                                  , numPatterns = 2
+                                  , declaredType = (F (T "Nat") (T "Nat"))
+                                  }
+    checkProgram [natDef, twoDef, plusDefWrong]
+      `shouldBe` [natDef, twoDef, Error (explain err)]
   it "missing pattern type" $ do
-    checkProgram [ DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
-                 , DefVal "two" (Just (T "Nat")) [
-                      Case [] (App (Cst "S")  (App (Cst "S")  (App (Cst "S") (Cst "Z"))))
-                      ]
-                 , DefVal "plus" (Just (F (T "Nat") (F (T "Nat") (T "Nat")))) [
-                      Case [Hole "y"] (Var "y"),
-                      Case [Constructor "S" [Hole "x"], Hole "y"] (App (Cst "S")
-                                                                   (App (App (Var "plus")
-                                                                         (Var "x"))
-                                                                    (Var "y")))
-                      ]
-                 ] `shouldBe` Left (ExpressionTypeMismatch { expression = (Var "y")
-                                                           , expectedType = (F (T "Nat") (T "Nat"))
-                                                           , actualType = (T "Nat")
-                                                           })
+    let plusDefWrong = DefVal "plus" (Just (F (T "Nat") (F (T "Nat") (T "Nat")))) [
+          Case [Hole "y"] (Var "y"),
+          --   ^-- should have 2 patterns
+          Case [Constructor "S" [Hole "x"], Hole "y"] (App (Cst "S")
+                                                       (App (App (Var "plus")
+                                                             (Var "x"))
+                                                        (Var "y")))
+          ]
+    let err = ExpressionTypeMismatch { expression = (Var "y")
+                                     , expectedType = (F (T "Nat") (T "Nat"))
+                                     , actualType = (T "Nat")
+                                     }
+    checkProgram [natDef, twoDef, plusDefWrong]
+      `shouldBe` [natDef, twoDef, Error (explain err)]
   it "shadowing" $ do
-    checkProgram [ DefData "Unit" [Variant "Unit"[]]
-                 , DefVal "id" (Just (F (T "Unit") (T "Unit"))) [
-                      -- id id = id   -- rightmost id refers to the param, not the global.
-                      Case [Hole "id"] (Var "id")
-                      ]
-                 ] `shouldBe` Right ()
+    let prog = [ DefData "Unit" [Variant "Unit"[]]
+               , DefVal "id" (Just (F (T "Unit") (T "Unit"))) [
+                    -- id id = id   -- rightmost id refers to the param, not the global.
+                    Case [Hole "id"] (Var "id")
+                    ]
+               ]
+    checkProgram prog `shouldBe` prog
 
 
 
@@ -130,10 +129,24 @@ typeLookup :: String -> Env -> TC Type
 typeLookup name env = Map.lookup name env `orFail` Unbound name
 
 
-checkProgram :: Program -> TC ()
-checkProgram prog =
+checkProgram :: Program -> Program
+-- Running checkProgramOnce can remove a definition if it has an error,
+-- but it doesn't remove other defs that depend on that one.
+-- So you need to keep typechecking until it converges.
+-- The resulting program has no type errors.
+-- (This is always possible: in the worst case, if every def is bad,
+--  you get the empty program.)
+checkProgram = converge checkProgramOnce
+
+checkProgramOnce :: Program -> Program
+checkProgramOnce prog =
   let env = unions (map scanStmt prog) in
-  mapM_ (checkStmt env) prog
+  map (checkStmtRecover env) prog
+
+checkStmtRecover :: Env -> Stmt -> Stmt
+checkStmtRecover env stmt = case checkStmt env stmt of
+  Left err -> Error (explain err)
+  Right () -> stmt
 
 -- returns a partial environment
 scanStmt :: Stmt -> Env
@@ -141,6 +154,7 @@ scanStmt (DefData tyname variants) = unions (map (scanVariant tyname) variants)
 scanStmt (DefVal _ Nothing _) = Map.empty
 scanStmt (DefVal vname (Just ty) _) = Map.fromList [(vname, ty)]
 scanStmt (Expr _) = Map.empty
+scanStmt (Error _) = Map.empty
 
 scanVariant :: Uppercase -> Variant -> Env
 scanVariant tyname (Variant cname argtypes) = Map.fromList [(cname, ctype)]
@@ -159,6 +173,7 @@ checkStmt env (DefVal _    Nothing [Case [] expr]) = void (checkExpr env expr)
 checkStmt _   (DefVal name Nothing _) = Left (MissingAnnotation name)
 -- When there is an annotation, check each case against it.
 checkStmt env (DefVal name (Just ty) cases) = mapM_ (checkCase name env ty) cases
+checkStmt _   (Error _) = return ()
 
 checkCase :: String -> Env -> Type -> Case -> TC ()
 checkCase name env ty (Case pats expr) = do

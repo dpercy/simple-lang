@@ -50,32 +50,31 @@ runServer = do
 
     post (fromString "/eval") $ do
       contents <- unpack <$> body
-      case runProgramString "<request>" contents of
-       Left errmsg -> text (fromString errmsg)
-       Right progDone -> text (fromString (printProgram progDone))
+      let progDone = (runProgramString "<request>" contents)
+      text (fromString (printProgram progDone))
 
 runFileContents :: String -> String -> IO ()
 runFileContents filename contents = do
   --mapM_ print defsAndExprs
   --putStrLn ""
-  case runProgramString filename contents of
-   Left errmsg -> error errmsg
-   Right progDone -> putStrLn (printProgram progDone)
+  let progDone = runProgramString filename contents
+  putStrLn (printProgram progDone)
 
-runProgramString :: String -> String -> Either String Program
+runProgramString :: String -> String -> Program
 runProgramString filename contents = do
-  prog <- case iParse pProgram filename contents of
-           Left err -> Left (show err)
-           Right parsed -> Right parsed
+  let prog = case iParse pProgram filename contents of
+              -- TODO do error recovery in the parser instead
+              Left err -> [Error (show err)]
+              Right parsed -> parsed
   runProgram prog
 
-runProgram :: Program -> Either String Program
+runProgram :: Program -> Program
 runProgram prog = do
-  check prog TypeCheck.checkProgram TypeCheck.explain
-  check prog WellFormedTypes.checkProgram WellFormedTypes.explain
-  check prog CaseCoverage.checkProgram CaseCoverage.explain
-  check prog Termination.checkProgram show
-  Right (evalProgram prog)
+  let prog2 = TypeCheck.checkProgram prog
+  check prog2 WellFormedTypes.checkProgram WellFormedTypes.explain
+  check prog2 CaseCoverage.checkProgram CaseCoverage.explain
+  check prog2 Termination.checkProgram show
+  evalProgram prog2
 
 
 runFile :: String -> IO ()

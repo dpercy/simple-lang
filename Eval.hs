@@ -62,6 +62,7 @@ mcStmt :: (Expr -> Expr) -> Stmt -> Stmt
 mcStmt f (Expr e) = Expr (f e)
 mcStmt _ def@(DefData{}) = def
 mcStmt f (DefVal name ty cases) = DefVal name ty (map (mcCase f) cases)
+mcStmt _ err@(Error _) = err
 
 mcCase :: (Expr -> Expr) -> Case -> Case
 mcCase f (Case [] expr) = Case [] (f expr)
@@ -96,6 +97,7 @@ rewriteStmt :: Stmt -> Rewriter
 rewriteStmt (DefData{}) = rewriteFail
 rewriteStmt (Expr _) = rewriteFail
 rewriteStmt (DefVal name _ cases) = orderedChoices (map (rewriteCase name) cases)
+rewriteStmt (Error _) = rewriteFail
 
 rewriteCase :: Lowercase -> Case -> Rewriter
 rewriteCase funcname (Case pats rhs) expr = do

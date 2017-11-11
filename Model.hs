@@ -15,6 +15,9 @@ data Stmt = DefData Uppercase [Variant]
             -- but a simple-minded typechecker might reject you if you omit the type.
           | DefVal Lowercase (Maybe Type) [Case]
           | Expr Expr
+            -- Error is not a "real" statement; it's the result of
+            -- some statements failing, for example during typechecking.
+          | Error String
           deriving (Show, Eq)
 
 

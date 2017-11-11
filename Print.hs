@@ -24,6 +24,16 @@ printStmt (DefVal name maybeTy cases) = intercalate "\n" . filter (/= "") $ [
   printTypeDecl name maybeTy,
   printCases name cases
   ]
+printStmt (Error errmsg) = banner errmsg
+
+banner :: String -> String
+banner msg = bar ++ prefix "# " msg ++ bar
+
+bar :: String
+bar = take 78 (repeat '#') ++ "\n"
+
+prefix :: String -> String -> String
+prefix s = unlines . map (s ++) . lines
 
 printTypeDecl :: Lowercase -> Maybe Type -> String
 printTypeDecl name Nothing = name ++ " :: _"

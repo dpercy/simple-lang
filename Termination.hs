@@ -20,6 +20,7 @@ import qualified Data.Vector as Vector
 
 import Data.Maybe
 
+import Util
 import Model
 
 import Test.Hspec
@@ -173,11 +174,6 @@ At this point, doing another step doesn't grow the graph at all, so you're done.
 -}
 
 
-converge :: Eq a => (a -> a) -> a -> a
-converge step start = if next == start then start else converge step next
-  where next = step start
-
-
 newtype Multigraph v e = Multigraph (Set (v, v, e))
                        deriving (Show, Eq)
 
@@ -248,6 +244,7 @@ checkStmt env (DefVal name _ _) =
    Just selfCalls -> if hasDecreasingArg selfCalls
                      then return ()
                      else Left (NonterminationError { name, selfCalls })
+checkStmt _ (Error _) = return ()
 
 hasDecreasingArg :: Set [Rel] -> Bool
 hasDecreasingArg calls =
@@ -327,6 +324,7 @@ genStmt _ (DefData{}) = emptyGraph
 -- The call graph represents calls from one function to another,
 -- so call expressions that occur outside a function definition don't contribute.
 genStmt _ (Expr _) = emptyGraph
+genStmt _ (Error _) = emptyGraph
 genStmt genv (DefVal name _ cases) = merges (map (genCase genv name) cases)
 
 genCase :: GlobalEnv -> Lowercase -> Case -> Multigraph Uppercase (Matrix Rel)
