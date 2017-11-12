@@ -188,6 +188,7 @@ getTypeEnv prog = Map.fromList $ do
    DefData tyName variants -> [ (T tyName, variants) ]
    DefVal{} -> []
    Expr _ -> []
+   Error{} -> []
 
 
 
@@ -212,6 +213,7 @@ checkStmtRecover env s = recover s (checkStmt env s)
 
 checkStmt :: Env -> Stmt -> Either CaseCoverageError ()
 checkStmt _ (Expr _) = return ()
+checkStmt _ (Error{}) = return ()
 checkStmt _ (DefVal _ _ [Case [] _]) = return () -- 1 case, 0 args covers all cases.
 checkStmt _ (DefData{}) = return ()
 checkStmt _ (DefVal vname Nothing _) = Left (MissingTypeAnnotation vname)

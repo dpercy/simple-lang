@@ -22,6 +22,7 @@ import Data.Maybe
 
 import Util
 import Model
+import qualified TypeCheck (checkProgram)
 
 import Test.Hspec
 
@@ -233,6 +234,12 @@ data NonterminationError = NonterminationError { name :: Uppercase
                                                , selfCalls :: Set [Rel]
                                                }
                          deriving (Show, Eq)
+instance Explain NonterminationError where
+  explain (NonterminationError { name, selfCalls }) = unlines [
+    "Function " ++ show name ++ " doesn't have an argument that decreases in all cases.",
+    "Cases were:",
+    unlines (map show (Set.toList selfCalls))
+    ]
 
 checkStmt :: Map Uppercase (Set [Rel]) -> Stmt -> Either NonterminationError ()
 checkStmt _ (DefData{}) = return ()
@@ -254,11 +261,21 @@ hasDecreasingArg calls =
        then True
        else hasDecreasingArg (Set.map tail calls)
 
-checkProgram :: Program -> Either NonterminationError ()
-checkProgram defs = do
+checkProgram :: Program -> Program
+-- The termination checker removes any definitions it doesn't like,
+-- but it doesn't remove defs or expressions that depended on the removed ones.
+-- So you need to do scope checking afterwards.
+-- Re-running type checking is overkill, but sufficient.
+checkProgram = TypeCheck.checkProgram . checkProgramOnce
+
+checkProgramOnce :: Program -> Program
+checkProgramOnce defs = do
   let graph = generateGraph defs
   let env = recursionBehavior (complete graph)
-  mapM_ (checkStmt env) defs
+  map (checkStmtRecover env) defs
+
+checkStmtRecover :: Map Uppercase (Set [Rel]) -> Stmt -> Stmt
+checkStmtRecover env s = recover s (checkStmt env s)
 
 
 -- local env maps free a variable to a row:
@@ -385,53 +402,63 @@ testTermination = do
       DefVal "loop" Nothing [
          Case [] (Var "loop")
          ]
-      ] `shouldBe` Left (NonterminationError { name = "loop"
-                                             , selfCalls = Set.fromList [
-                                               -- just one call, no args.
-                                               []
-                                               ]})
+      ] `shouldBe` [ Error (explain (NonterminationError { name = "loop"
+                                                         , selfCalls = Set.fromList [
+                                                           -- just one call, no args.
+                                                           []
+                                                           ]})) ]
   it "loop0 loop1 fails" $ do
     checkProgram [
       DefVal "loop0" Nothing [ Case [] (Var "loop1") ],
       DefVal "loop1" Nothing [ Case [] (Var "loop0") ]
-      ] `shouldBe` Left (NonterminationError { name = "loop0"
-                                             , selfCalls = Set.fromList [ [] ]})
+      ] `shouldBe` [ Error (explain (NonterminationError { name = "loop0"
+                                                         , selfCalls = Set.fromList [ [] ]}))
+                   , Error (explain (NonterminationError { name = "loop1"
+                                                         , selfCalls = Set.fromList [ [] ]}))
+                   ]
   it "length terminates" $ do
-    checkProgram [
-      DefVal "length" Nothing [
-         Case [Constructor "Nil" []] (Cst "Zero"),
-         Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
-                                                           (App (Var "length")
-                                                            (Var "tl")))
-         ]
-      ] `shouldBe` Right ()
+    let prog = [
+          DefVal "length" Nothing [
+             Case [Constructor "Nil" []] (Cst "Zero"),
+             Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
+                                                               (App (Var "length")
+                                                                (Var "tl")))
+             ]
+          ]
+    checkProgram prog `shouldBe` prog
   it "length without base case... is actually OK! (handled by type/case checker)" $ do
-    checkProgram [
-      DefVal "length" Nothing [
-         -- Case [Constructor "Nil" []] (Cst "Zero"),
-         Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
-                                                           (App (Var "length") (Var "tl")))
-         ]
-      ] `shouldBe` Right ()
+    let prog = [
+          DefVal "length" Nothing [
+             -- Case [Constructor "Nil" []] (Cst "Zero"),
+             Case [Constructor "Cons" [Hole "hd", Hole "tl"]] (App (Cst "Succ")
+                                                               (App (Var "length") (Var "tl")))
+             ]
+          ]
+    checkProgram prog `shouldBe` prog
   it "map terminates" $ do
-    checkProgram [
-      DefVal "map" Nothing [
-         Case [Hole "f", Constructor "Nil" []] (Cst "Nil"),
-         Case [Hole "f", Constructor "Cons" [Hole "hd", Hole "tl"]]
-         (App (App (Cst "Cons") (App (Var "f") (Var "hd")))
-          (App (App (Var "map") (Var "f")) (Var "tl")))
-         ]
-      ] `shouldBe` Right ()
+    let prog = [
+          DefVal "map" Nothing [
+             Case [Hole "f", Constructor "Nil" []] (Cst "Nil"),
+             Case [Hole "f", Constructor "Cons" [Hole "hd", Hole "tl"]]
+             (App (App (Cst "Cons") (App (Var "f") (Var "hd")))
+              (App (App (Var "map") (Var "f")) (Var "tl")))
+             ]
+          ]
+    checkProgram prog `shouldBe` prog
   it "you can't hide that recursion from me!" $ do
     checkProgram [
       DefVal "app" Nothing [ Case [Hole "f"] (Var "f") ],
       DefVal "loop" Nothing [ Case [Hole "u"] (App (App (Var "app") (Var "loop")) (Var "u")) ]
-      ] `shouldBe` Left (NonterminationError { name = "loop"
-                                             , selfCalls = Set.fromList [
-                                               -- one call, one unknown arg.
-                                               [ Uk ]
-                                               ] })
+      ] `shouldBe` [
+      DefVal "app" Nothing [ Case [Hole "f"] (Var "f") ],
+      Error (explain (NonterminationError { name = "loop"
+                                          , selfCalls = Set.fromList [
+                                            -- one call, one unknown arg.
+                                            [ Uk ]
+                                            ] }))
+      ]
   it "shadowing" $ do
-    checkProgram [
-      DefVal "id" Nothing [ Case [Hole "id"] (Var "id") ]
-      ] `shouldBe` Right ()
+    let prog = [
+          DefVal "id" Nothing [ Case [Hole "id"] (Var "id") ]
+          ]
+    checkProgram prog `shouldBe` prog
