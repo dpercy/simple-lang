@@ -4,6 +4,7 @@
 module Model where
 
 import Data.Data (Data)
+import Data.Void (Void)
 import Test.Hspec
 
 
@@ -30,9 +31,11 @@ data Variant = Variant Uppercase [Type] -- note: no generic containers for now.
 -- a type is either:
 --   - a named type (defined by a data definition)
 --   - a function type (which contains an argument type and a result type)
-data Type = T Uppercase
-          | F Type Type
-          deriving (Show, Eq, Ord)
+data TypeOf h = T Uppercase
+              | F (TypeOf h) (TypeOf h)
+              | H h
+              deriving (Show, Eq, Ord)
+type Type = TypeOf Void
 
 
 --

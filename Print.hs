@@ -46,11 +46,12 @@ printCases name _ = name ++ " = ..."
 printVariant :: Variant -> String
 printVariant (Variant name args) = unwords (name:(map printTypeArg args))
 
-printType :: Type -> String
+printType :: Show h => TypeOf h -> String
 printType (T name) = name
 printType (F inn out) = printTypeArg inn ++ " -> " ++ printType out
+printType (H h) = "(" ++ show h ++ ")"
 
-printTypeArg :: Type -> String
+printTypeArg :: Show h => TypeOf h -> String
 printTypeArg (T name) = name
 printTypeArg t = "(" ++ printType t ++ ")"
 

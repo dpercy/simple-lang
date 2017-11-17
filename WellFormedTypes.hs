@@ -9,6 +9,7 @@ module WellFormedTypes (
 
 
 import Data.Map (Map)
+import Data.Void (absurd)
 import qualified Data.Map as Map
 import Test.Hspec
 
@@ -160,10 +161,12 @@ checkContra tname v@(Variant _ types) = if any (tyContainsContra tname) types
 tyContainsContra :: Uppercase -> Type -> Bool
 tyContainsContra _ (T _) = False
 tyContainsContra tname (F inn out) = tyContainsCov tname inn || tyContainsContra tname out
+tyContainsContra _ (H h) = absurd h
 
 tyContainsCov :: Uppercase -> Type -> Bool
 tyContainsCov tname (T t) = tname == t
 tyContainsCov tname (F inn out) = tyContainsContra tname inn || tyContainsCov tname out
+tyContainsCov _     (H h) = absurd h
 
 
 type CycleEnv = Map Uppercase [Uppercase]
@@ -206,6 +209,7 @@ tdGraphVariant tname (Variant _ argtypes) = Map.unionsWith (++) (map (tdGraphTy 
 tdGraphTy :: Uppercase -> Type -> CycleEnv
 tdGraphTy tname (T t) = Map.fromList [(tname, [t])]
 tdGraphTy tname (F inn out) = Map.unionWith (++) (tdGraphTy tname inn) (tdGraphTy tname out)
+tdGraphTy _     (H h) = absurd h
 
 
 -- Every data definition must include a base case.
@@ -224,4 +228,5 @@ variantMentions tname (Variant _ args) = any (typeMentions tname) args
 typeMentions :: Uppercase -> Type -> Bool
 typeMentions tname (T t) = tname == t
 typeMentions tname (F inn out) = typeMentions tname inn || typeMentions tname out
+typeMentions _     (H h) = absurd h
 
