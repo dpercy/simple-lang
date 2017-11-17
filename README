@@ -28,11 +28,11 @@ rough implementation:
     - treat defval equations as rewrite rules
     - just use uniplate
 
-- notebook
+- DONE (first pass) notebook
     - DONE constantly recompute the type and value of every def (and expr)
         - better than Jupyter, which requires you to manually re-update cells
 
-    - TODO don't let a bad def prevent you from checking/running other defs
+    - DONE don't let a bad def prevent you from checking/running other defs
         - this means all static checks (typechecking, case coverage, well-founded-recursion)
 	  must mark individual definitions as failed instead of the whole program
 
@@ -47,16 +47,22 @@ rough implementation:
 	 - which definitions have a value
 	 -
 
+- polymorphism
+http://www.cs.cornell.edu/courses/cs312/2005sp/lectures/rec22.asp
+    - need type variables
+    - need data definitions to allow type parameters and type variables
+    - can we still do type checking (not inference)?
+    - should probably reread sections of PLAI and TAPL
+      - may want to break this up - do parameterized types first, then polymorphic functions later?
+also read this: https://people.mpi-sws.org/~rossberg/1ml/
+"1ML" is like System F-omega but more usable and with (partial) type inference
+
+
 - trace viewer
     - like "resugaring", except instead of macros we have normal function calls
     - map f [1,2,3]  steps immediately to  [f 1, f 2, f 3]  if we hide map
         - even if map is defined in terms of fold
     - or
-
-- polymorphism
-    - probably touches all layers of the type system
-    - probably doesn't touch the rewrite-evaluator?
-
 
 
 - JS evaluator
