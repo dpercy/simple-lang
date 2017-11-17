@@ -398,7 +398,7 @@ genArg (LocalEnv def m) (Var name) = row (Map.findWithDefault def name m)
 testTermination :: Spec
 testTermination = do
   it "loop fails" $ do
-    checkProgram [
+    checkProgramOnce [
       DefVal "loop" Nothing [
          Case [] (Var "loop")
          ]
@@ -408,7 +408,7 @@ testTermination = do
                                                            []
                                                            ]})) ]
   it "loop0 loop1 fails" $ do
-    checkProgram [
+    checkProgramOnce [
       DefVal "loop0" Nothing [ Case [] (Var "loop1") ],
       DefVal "loop1" Nothing [ Case [] (Var "loop0") ]
       ] `shouldBe` [ Error (explain (NonterminationError { name = "loop0"
@@ -425,7 +425,7 @@ testTermination = do
                                                                 (Var "tl")))
              ]
           ]
-    checkProgram prog `shouldBe` prog
+    checkProgramOnce prog `shouldBe` prog
   it "length without base case... is actually OK! (handled by type/case checker)" $ do
     let prog = [
           DefVal "length" Nothing [
@@ -434,7 +434,7 @@ testTermination = do
                                                                (App (Var "length") (Var "tl")))
              ]
           ]
-    checkProgram prog `shouldBe` prog
+    checkProgramOnce prog `shouldBe` prog
   it "map terminates" $ do
     let prog = [
           DefVal "map" Nothing [
@@ -444,9 +444,9 @@ testTermination = do
               (App (App (Var "map") (Var "f")) (Var "tl")))
              ]
           ]
-    checkProgram prog `shouldBe` prog
+    checkProgramOnce prog `shouldBe` prog
   it "you can't hide that recursion from me!" $ do
-    checkProgram [
+    checkProgramOnce [
       DefVal "app" Nothing [ Case [Hole "f"] (Var "f") ],
       DefVal "loop" Nothing [ Case [Hole "u"] (App (App (Var "app") (Var "loop")) (Var "u")) ]
       ] `shouldBe` [
@@ -461,4 +461,4 @@ testTermination = do
     let prog = [
           DefVal "id" Nothing [ Case [Hole "id"] (Var "id") ]
           ]
-    checkProgram prog `shouldBe` prog
+    checkProgramOnce prog `shouldBe` prog
