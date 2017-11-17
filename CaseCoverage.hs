@@ -209,7 +209,7 @@ checkProgram :: Program -> Program
 checkProgram prog = map (checkStmtRecover (getTypeEnv prog)) prog
 
 checkStmtRecover :: Env -> Stmt -> Stmt
-checkStmtRecover env s = recover s (checkStmt env s)
+checkStmtRecover env stmt = recover stmt (checkStmt env stmt)
 
 checkStmt :: Env -> Stmt -> Either CaseCoverageError ()
 checkStmt _ (Expr _) = return ()

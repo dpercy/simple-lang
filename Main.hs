@@ -82,10 +82,3 @@ runFile filename = do
   withFile filename ReadMode $ \fd -> do
     contents <- hGetContents fd
     runFileContents filename contents
-
-check :: Program -> (Program -> Either err ()) -> (err -> String) -> Either String ()
-check prog checker explainer = case checker prog of
-  Right () -> Right ()
-  Left err -> Left (explainer err)
-
-  
