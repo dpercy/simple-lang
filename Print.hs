@@ -35,7 +35,7 @@ bar = take 78 (repeat '#') ++ "\n"
 prefix :: String -> String -> String
 prefix s = unlines . map (s ++) . lines
 
-printTypeDecl :: Lowercase -> Maybe Type -> String
+printTypeDecl :: Lowercase -> Maybe TypeSchema -> String
 printTypeDecl name Nothing = name ++ " :: _"
 printTypeDecl name (Just ty) = name ++ " :: " ++ printType ty
 
@@ -79,4 +79,3 @@ testPrint = do
                 (App (Cst "Succ")
                  (App (Cst "Succ") (Cst "Zero")))))
       `shouldBe` "Succ (Succ (Succ (Succ Zero)))"
-  

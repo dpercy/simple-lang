@@ -11,6 +11,7 @@ module Parser (
 import Control.Monad.State
 import Control.Monad.Identity
 import Data.List
+import Data.Void
 import Test.Hspec
 import Text.Parsec hiding (State, token)
 import Text.Parsec.Indent
@@ -96,18 +97,27 @@ pDefVal = do
   cases <- many1 (try (pCase name))
   return $ DefVal name typ cases
 
-pTypeDecl :: String -> IParser Type
+pTypeDecl :: String -> IParser TypeSchema
 pTypeDecl name = withPos $ do
   pWord name
   void $ token (string "::")
-  ty <- pType
+  ty <- pTypeSchema
   return ty
 
-pType :: IParser Type
-pType = chainr1 pFactor (token (string "->") >> return F)
-  where pFactor :: IParser Type
-        pFactor = pParens pType
+pTypeOf :: IParser h -> IParser (TypeOf h)
+pTypeOf pHole = chainr1 pFactor (token (string "->") >> return F)
+  where pFactor = pParens (pTypeOf pHole)
                   <|> (T <$> tokUpper)
+                  <|> (H <$> pHole)
+
+pMonoType :: IParser MonoType
+pMonoType = pTypeOf nope
+  where nope :: IParser Void
+        nope = do
+          fail "nope"
+
+pTypeSchema :: IParser TypeSchema
+pTypeSchema = pTypeOf tokLower
         
 
 pCase :: String -> IParser Case
@@ -127,7 +137,7 @@ pDefData = (<?> "data definition") $ withPos $ do
   variants <- pVariant `sepBy` token (char '|')
   return $ DefData typeName variants
     where pVariant :: IParser Variant
-          pVariant = Variant <$> tokUpper <*> many pType
+          pVariant = Variant <$> tokUpper <*> many pMonoType
 
 pExprStmt :: IParser Stmt
 pExprStmt = withPos $ do

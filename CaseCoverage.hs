@@ -59,10 +59,10 @@ t = c "True" []
 f :: Pattern
 f = c "False" []
 
-b :: Type
+b :: TypeOf h
 b = T "Bool"
 
-n :: Type
+n :: TypeOf h
 n = T "Nat"
 
 z :: Pattern
@@ -127,8 +127,20 @@ testCaseCoverage = do
         [h, s (s h), h]
         ]
 
-
+-- TODO for polymorphism I think you just need "incomplete types": TypeOf (),
+-- where H () represents "an unknown type".
+type Type = MonoType -- TODO TypeOf Unknown where data Unknown = Unknown.
+-- TODO with polymorphism you need to be able to look up types of
+-- various kinds: for example List is a (* -> *) type operator,
+-- so depending on the type argument you get a different set of variants.
 type Env = Map Type [Variant]
+
+-- instantiate takes a declared type and converts it to Type, which
+-- is the convenient form for CaseCoverage.
+instantiate :: TypeSchema -> Type
+instantiate (T name) = T name
+instantiate (F inn out) = F (instantiate inn) (instantiate out)
+instantiate (H _) = error "TODO type operators and stuff"
 
 -- Fuzzy a represents a set of a.
 -- It's useful to avoid confusing a sequence/row/product of things with a set/sum of things.
@@ -218,8 +230,9 @@ checkStmt _ (DefVal _ _ [Case [] _]) = return () -- 1 case, 0 args covers all ca
 checkStmt _ (DefData{}) = return ()
 checkStmt _ (DefVal vname Nothing _) = Left (MissingTypeAnnotation vname)
 checkStmt env (DefVal vname (Just ty) cases) =
+  let ty' = instantiate ty in
   let arity = length (casePatterns (head cases)) in
-  let argTypes = take arity (typeArguments ty) in
+  let argTypes = take arity (typeArguments ty') in
   let initialInputs = Fuzzy [ take arity (repeat (Hole "_")) ] in
   let unhandledPatterns = foldl (subtractPats' env argTypes) initialInputs (map casePatterns cases) in
   case unhandledPatterns of

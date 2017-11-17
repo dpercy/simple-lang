@@ -14,7 +14,7 @@ type Program = [Stmt]
 data Stmt = DefData Uppercase [Variant]
             -- defval's type annotation is optional,
             -- but a simple-minded typechecker might reject you if you omit the type.
-          | DefVal Lowercase (Maybe Type) [Case]
+          | DefVal Lowercase (Maybe TypeSchema) [Case]
           | Expr Expr
             -- Error is not a "real" statement; it's the result of
             -- some statements failing, for example during typechecking.
@@ -25,7 +25,7 @@ data Stmt = DefData Uppercase [Variant]
 
 -- data definitions have a name and a set of variants.
 -- each variant defines a single constructor: its name, and its argument types.
-data Variant = Variant Uppercase [Type] -- note: no generic containers for now.
+data Variant = Variant Uppercase [MonoType] -- note: no generic containers for now.
              deriving (Show, Eq)
 
 -- a type is either:
@@ -35,8 +35,11 @@ data TypeOf h = T Uppercase
               | F (TypeOf h) (TypeOf h)
               | H h
               deriving (Show, Eq, Ord)
-type Type = TypeOf Void
 
+type MonoType = TypeOf Void
+
+-- represents an implicit forall type like (forall x y. x -> (x -> y) -> y)
+type TypeSchema = TypeOf Lowercase
 
 --
 data Case = Case [Pattern] Expr
@@ -55,22 +58,22 @@ type Lowercase = String
 type Uppercase = String
 
 
-typeArguments :: Type -> [Type]
+typeArguments :: TypeOf h -> [TypeOf h]
 typeArguments (F a0 ty) = a0:(typeArguments ty)
 typeArguments _ = []
 
-typeFinalResult :: Type -> Type
+typeFinalResult :: TypeOf h -> TypeOf h
 typeFinalResult (F _ ty) = typeFinalResult ty
 typeFinalResult ty = ty
 
-makeFunctionType :: [Type] -> Type -> Type
+makeFunctionType :: [TypeOf h] -> TypeOf h -> TypeOf h
 makeFunctionType args result = foldr F result args
 
 
 testModel :: Spec
 testModel = do
   it "function arguments and results" $ do
-    let ty = F (T "a") (F (T "b") (T "c"))
+    let ty = F (T "a") (F (T "b") (T "c")) :: MonoType
     let args = typeArguments ty
     let result = typeFinalResult ty
     args `shouldBe` [T "a", T "b"]

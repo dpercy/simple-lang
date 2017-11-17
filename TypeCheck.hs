@@ -9,6 +9,7 @@ module TypeCheck (
 
 import Control.Monad (void)
 import Data.Map (Map)
+import Data.Void
 import qualified Data.Map as Map
 import Test.Hspec
 
@@ -73,6 +74,9 @@ testTypeCheck = do
 
 type TC v = Either TypeError v
 
+-- for now the type checker still only computes monotypes.
+type Type = MonoType
+
 data TypeError = MissingAnnotation { name :: Lowercase }
                | MissingArgumentType { valueName :: String
                                      , numPatterns :: Int
@@ -124,10 +128,37 @@ instance Explain TypeError where
     "These types form a contravariant cycle: " ++ show typeNames
 
 
-type Env = Map String Type
+type Env = Map String TypeSchema
 
 typeLookup :: String -> Env -> TC Type
-typeLookup name env = Map.lookup name env `orFail` Unbound name
+typeLookup name env = case Map.lookup name env of
+  Just ty -> instantiate ty
+  Nothing -> Left (Unbound name)
+
+-- abstract takes a typechecker type and returns a TypeSchema.
+-- It "abstracts over" a concrete type by replacing unification variables with
+-- forall-qualified variables.
+abstract :: Type -> TypeSchema
+abstract (T t) = T t
+abstract (F inn out) = F (abstract inn) (abstract out)
+abstract (H h) = absurd h
+
+-- monoType just creates a non-polymorphic type schema.
+monoType :: MonoType -> TypeSchema
+monoType (T t) = T t
+monoType (F inn out) = F (monoType inn) (monoType out)
+monoType (H h) = absurd h
+
+-- instantiate "copies" a type schema, generating fresh unification variables
+-- for each of the forall-qualified variables.
+instantiate :: TypeSchema -> TC Type
+instantiate (T t) = return (T t)
+instantiate (F inn out) = do
+  inn' <- instantiate inn
+  out' <- instantiate out
+  return (F inn' out')
+  
+instantiate (H _) = error "TODO implement polymorphism"
 
 
 checkProgram :: Program -> Program
@@ -158,7 +189,7 @@ scanStmt (Expr _) = Map.empty
 scanStmt (Error _) = Map.empty
 
 scanVariant :: Uppercase -> Variant -> Env
-scanVariant tyname (Variant cname argtypes) = Map.fromList [(cname, ctype)]
+scanVariant tyname (Variant cname argtypes) = Map.fromList [(cname, monoType ctype)]
   where ctype = makeFunctionType argtypes (T tyname)
 
 checkStmt :: Env -> Stmt -> TC ()
@@ -173,7 +204,9 @@ checkStmt env (DefVal _    Nothing [Case [] expr]) = void (checkExpr env expr)
 -- We only do type checking, not type inference.
 checkStmt _   (DefVal name Nothing _) = Left (MissingAnnotation name)
 -- When there is an annotation, check each case against it.
-checkStmt env (DefVal name (Just ty) cases) = mapM_ (checkCase name env ty) cases
+checkStmt env (DefVal name (Just ty) cases) = do
+  ty' <- instantiate ty
+  mapM_ (checkCase name env ty') cases
 checkStmt _   (Error _) = return ()
 
 checkCase :: String -> Env -> Type -> Case -> TC ()
@@ -208,7 +241,10 @@ checkPatterns env typedPats = unions <$> mapM (checkPattern env) typedPats
 -- patterns are checked top-down.
 -- returns a partial environment - only the new bindings
 checkPattern :: Env -> (Type, Pattern) -> TC Env
-checkPattern _ (ty, Hole name) = return (Map.fromList [(name, ty)])
+-- When checking a pattern, typechecker-types flow in from the outmost form,
+-- and stop when they reach a hole. (This is like the dual of expressions!)
+-- 
+checkPattern _ (ty, Hole name) = return (Map.fromList [(name, abstract ty)])
 checkPattern env (ty, pat@(Constructor cname argpats)) = do
   ctype <- typeLookup cname env
   -- In contrast to zipPats,

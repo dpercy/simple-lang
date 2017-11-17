@@ -158,15 +158,15 @@ checkContra tname v@(Variant _ types) = if any (tyContainsContra tname) types
                                                                           })
                                         else return ()
 
-tyContainsContra :: Uppercase -> Type -> Bool
+tyContainsContra :: Uppercase -> TypeOf a -> Bool
 tyContainsContra _ (T _) = False
 tyContainsContra tname (F inn out) = tyContainsCov tname inn || tyContainsContra tname out
-tyContainsContra _ (H h) = absurd h
+tyContainsContra _ (H _) = False
 
-tyContainsCov :: Uppercase -> Type -> Bool
+tyContainsCov :: Uppercase -> TypeOf a -> Bool
 tyContainsCov tname (T t) = tname == t
 tyContainsCov tname (F inn out) = tyContainsContra tname inn || tyContainsCov tname out
-tyContainsCov _     (H h) = absurd h
+tyContainsCov _     (H _) = False
 
 
 type CycleEnv = Map Uppercase [Uppercase]
@@ -204,12 +204,12 @@ tdGraphStmt (Expr _) = Map.empty
 tdGraphStmt (DefData tname variants) = Map.unionsWith (++) (map (tdGraphVariant tname) variants)
 
 tdGraphVariant :: Uppercase -> Variant -> CycleEnv
-tdGraphVariant tname (Variant _ argtypes) = Map.unionsWith (++) (map (tdGraphTy tname) argtypes)
+tdGraphVariant tname (Variant _ argtypes) = Map.unionsWith (++) (map (tdGraphMTy tname) argtypes)
 
-tdGraphTy :: Uppercase -> Type -> CycleEnv
-tdGraphTy tname (T t) = Map.fromList [(tname, [t])]
-tdGraphTy tname (F inn out) = Map.unionWith (++) (tdGraphTy tname inn) (tdGraphTy tname out)
-tdGraphTy _     (H h) = absurd h
+tdGraphMTy :: Uppercase -> MonoType -> CycleEnv
+tdGraphMTy tname (T t) = Map.fromList [(tname, [t])]
+tdGraphMTy tname (F inn out) = Map.unionWith (++) (tdGraphMTy tname inn) (tdGraphMTy tname out)
+tdGraphMTy _     (H h) = absurd h
 
 
 -- Every data definition must include a base case.
@@ -225,8 +225,7 @@ checkBaseCase s@(DefData tname variants) = if any (not . variantMentions tname) 
 variantMentions :: Uppercase -> Variant -> Bool
 variantMentions tname (Variant _ args) = any (typeMentions tname) args
 
-typeMentions :: Uppercase -> Type -> Bool
+typeMentions :: Uppercase -> TypeOf a -> Bool
 typeMentions tname (T t) = tname == t
 typeMentions tname (F inn out) = typeMentions tname inn || typeMentions tname out
-typeMentions _     (H h) = absurd h
-
+typeMentions _     (H _) = False
