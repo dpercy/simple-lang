@@ -77,9 +77,13 @@ newtype TyVar = TyVar Int deriving (Show, Eq)
 type UType = TypeOf TyVar
 
 newtype Store = Store (Map TyVar UType)
+emptyStore :: Store
+emptyStore = Store Map.empty
 
----- TODO type TC v = StateT Store (Except TypeError) v
-type TC v = (Except TypeError) v
+type TC v = StateT Store (Except TypeError) v
+
+runTC :: TC v -> Either TypeError v
+runTC comp = runExcept (evalStateT comp emptyStore)
 
 -- for now the type checker still only computes monotypes.
 type Type = MonoType
@@ -183,7 +187,7 @@ checkProgramOnce prog =
   map (checkStmtRecover env) prog
 
 checkStmtRecover :: Env -> Stmt -> Stmt
-checkStmtRecover env stmt = case runExcept (checkStmt env stmt) of
+checkStmtRecover env stmt = case runTC (checkStmt env stmt) of
   Left err -> Error (explain err)
   Right () -> stmt
 
@@ -307,6 +311,6 @@ tryZip (x:xs) (y:ys) = do
 tryZip _ _ = Nothing
 
 
-orFail :: Maybe good -> bad -> Except bad good
+orFail :: Maybe good -> TypeError -> TC good
 orFail Nothing bad = throwError bad
 orFail (Just good) _ = return good
