@@ -1,5 +1,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module TypeCheck (
   checkProgram,
@@ -80,10 +82,16 @@ newtype Store = Store (Map TyVar UType)
 emptyStore :: Store
 emptyStore = Store Map.empty
 
-type TC v = StateT Store (Except TypeError) v
+newtype TC v = TC (StateT Store (Except TypeError) v)
+             deriving ( Applicative
+                      , Functor
+                      , Monad
+                      , MonadState Store
+                      , MonadError TypeError
+                      )
 
 runTC :: TC v -> Either TypeError v
-runTC comp = runExcept (evalStateT comp emptyStore)
+runTC (TC comp) = runExcept (evalStateT comp emptyStore)
 
 -- for now the type checker still only computes monotypes.
 type Type = MonoType
