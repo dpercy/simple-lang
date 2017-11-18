@@ -23,6 +23,23 @@ import Model
 
 testTypeCheck :: Spec
 testTypeCheck = do
+  it "test error recovery" $ do
+    -- I want a failed computation to not mess with the store.
+    let addX :: TC ()
+        addX = do store <- (get :: TC Store)
+                  let store' = Map.insert (TyVar 1) (T "foo") store
+                  put store'
+        ouch :: TC ()
+        ouch = throwError (Unbound "ouch")
+        storeSize :: TC Int
+        storeSize = do store <- get
+                       return (Map.size store)
+        mutateThenFail :: TC Int
+        mutateThenFail = do
+          (do addX; ouch) `catchError` \err -> return ()
+          storeSize
+    runTC mutateThenFail `shouldBe` Right 0
+
   let natDef = DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
   let twoDef = DefVal "two" (Just (T "Nat")) [
         Case [] (App (Cst "S")  (App (Cst "S")  (App (Cst "S") (Cst "Z"))))]
@@ -75,13 +92,14 @@ testTypeCheck = do
     checkProgram prog `shouldBe` prog
 
 
-newtype TyVar = TyVar Int deriving (Show, Eq)
+newtype TyVar = TyVar Int deriving (Show, Eq, Ord)
 type UType = TypeOf TyVar
 
-newtype Store = Store (Map TyVar UType)
+type Store = Map TyVar UType
 emptyStore :: Store
-emptyStore = Store Map.empty
+emptyStore = Map.empty
 
+-- 
 newtype TC v = TC (StateT Store (Except TypeError) v)
              deriving ( Applicative
                       , Functor
