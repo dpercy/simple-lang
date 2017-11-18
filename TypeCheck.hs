@@ -7,6 +7,8 @@ module TypeCheck (
   testTypeCheck,
   ) where
 
+import Control.Monad.State
+import Control.Monad.Except
 import Control.Monad (void)
 import Data.Map (Map)
 import Data.Void
@@ -71,8 +73,13 @@ testTypeCheck = do
     checkProgram prog `shouldBe` prog
 
 
+newtype TyVar = TyVar Int deriving (Show, Eq)
+type UType = TypeOf TyVar
 
-type TC v = Either TypeError v
+newtype Store = Store (Map TyVar UType)
+
+---- TODO type TC v = StateT Store (Except TypeError) v
+type TC v = (Except TypeError) v
 
 -- for now the type checker still only computes monotypes.
 type Type = MonoType
@@ -133,7 +140,7 @@ type Env = Map String TypeSchema
 typeLookup :: String -> Env -> TC Type
 typeLookup name env = case Map.lookup name env of
   Just ty -> instantiate ty
-  Nothing -> Left (Unbound name)
+  Nothing -> throwError (Unbound name)
 
 -- abstract takes a typechecker type and returns a TypeSchema.
 -- It "abstracts over" a concrete type by replacing unification variables with
@@ -176,7 +183,7 @@ checkProgramOnce prog =
   map (checkStmtRecover env) prog
 
 checkStmtRecover :: Env -> Stmt -> Stmt
-checkStmtRecover env stmt = case checkStmt env stmt of
+checkStmtRecover env stmt = case runExcept (checkStmt env stmt) of
   Left err -> Error (explain err)
   Right () -> stmt
 
@@ -202,7 +209,7 @@ checkStmt env (Expr expr) = void (checkExpr env expr)
 checkStmt env (DefVal _    Nothing [Case [] expr]) = void (checkExpr env expr)
 -- Un-annotated defs in general are not supported yet.
 -- We only do type checking, not type inference.
-checkStmt _   (DefVal name Nothing _) = Left (MissingAnnotation name)
+checkStmt _   (DefVal name Nothing _) = throwError (MissingAnnotation name)
 -- When there is an annotation, check each case against it.
 checkStmt env (DefVal name (Just ty) cases) = do
   ty' <- instantiate ty
@@ -252,10 +259,10 @@ checkPattern env (ty, pat@(Constructor cname argpats)) = do
   let ctyArgs = typeArguments ctype
   let ctyResult = typeFinalResult ctype
   if ctyResult /= ty
-    then Left (PatternTypeMismatch { pattern = pat
-                                   , expectedType = ty
-                                   , actualType = ctyResult
-                                   })
+    then throwError (PatternTypeMismatch { pattern = pat
+                                         , expectedType = ty
+                                         , actualType = ctyResult
+                                         })
     else do
       typedPats <- (tryZip ctyArgs argpats
                     `orFail` ConstructorArity { cname = cname
@@ -270,10 +277,10 @@ checkExprWithType env expr expectedType = do
   actualType <- checkExpr env expr
   if expectedType == actualType
     then return ()
-    else Left (ExpressionTypeMismatch { expression = expr
-                                      , expectedType = expectedType
-                                      , actualType = actualType
-                                      })
+    else throwError (ExpressionTypeMismatch { expression = expr
+                                            , expectedType = expectedType
+                                            , actualType = actualType
+                                            })
 
 
 -- expressions are checked bottom-up.
@@ -284,10 +291,10 @@ checkExpr env (App callee arg) = do
   calleeType <- checkExpr env callee
   (expectedArgType, result) <- case calleeType of
                                 (F inn out) -> return (inn, out)
-                                _ -> Left (CallNonFunction { callee = callee
-                                                           , calleeType = calleeType
-                                                           , argument = arg
-                                                           })
+                                _ -> throwError (CallNonFunction { callee = callee
+                                                                 , calleeType = calleeType
+                                                                 , argument = arg
+                                                                 })
   checkExprWithType env arg expectedArgType
   return result
 
@@ -300,6 +307,6 @@ tryZip (x:xs) (y:ys) = do
 tryZip _ _ = Nothing
 
 
-orFail :: Maybe good -> bad -> Either bad good
-orFail Nothing bad = Left bad
-orFail (Just good) _ = Right good
+orFail :: Maybe good -> bad -> Except bad good
+orFail Nothing bad = throwError bad
+orFail (Just good) _ = return good
