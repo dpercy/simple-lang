@@ -36,7 +36,7 @@ testTypeCheck = do
                        return (Map.size store)
         mutateThenFail :: TC Int
         mutateThenFail = do
-          (do addX; ouch) `catchError` \err -> return ()
+          (do addX; ouch) `catchError` \_err -> return ()
           storeSize
     runTC mutateThenFail `shouldBe` Right 0
 
