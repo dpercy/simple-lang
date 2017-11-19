@@ -25,19 +25,12 @@ testTypeCheck :: Spec
 testTypeCheck = do
   it "test error recovery" $ do
     -- I want a failed computation to not mess with the store.
-    let addX :: TC ()
-        addX = do store <- (get :: TC Store)
-                  let store' = Map.insert (TyVar 1) (T "foo") store
-                  put store'
-        ouch :: TC ()
-        ouch = throwError (Unbound "ouch")
-        storeSize :: TC Int
-        storeSize = do store <- get
-                       return (Map.size store)
-        mutateThenFail :: TC Int
+    let mutateThenFail :: TC Int
         mutateThenFail = do
-          (do addX; ouch) `catchError` \_err -> return ()
-          storeSize
+          (do _ <- newTyVar
+              throwError (Unbound "ouch")
+            ) `catchError` (\_err -> return ())
+          Map.size <$> get
     runTC mutateThenFail `shouldBe` Right 0
 
   let natDef = DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
@@ -93,13 +86,26 @@ testTypeCheck = do
 
 
 newtype TyVar = TyVar Int deriving (Show, Eq, Ord)
-type UType = TypeOf TyVar
+type Type = TypeOf TyVar
 
-type Store = Map TyVar UType
+-- Every unification variable that "exists" is in the store.
+-- - (Nothing) means the variable is still free to be instantiated
+-- - (Just t) means a previous constraint forces the variable to be equal to t.
+type Store = Map TyVar (Maybe Type)
+
 emptyStore :: Store
 emptyStore = Map.empty
 
--- 
+newTyVar :: TC TyVar
+newTyVar = do
+  store <- (get :: TC Store)
+  let tyvar = TyVar (Map.size store) -- use map size as counter
+  let store' :: Store
+      store' = Map.insert tyvar Nothing store
+  put store'
+  return tyvar
+
+
 newtype TC v = TC (StateT Store (Except TypeError) v)
              deriving ( Applicative
                       , Functor
@@ -111,8 +117,6 @@ newtype TC v = TC (StateT Store (Except TypeError) v)
 runTC :: TC v -> Either TypeError v
 runTC (TC comp) = runExcept (evalStateT comp emptyStore)
 
--- for now the type checker still only computes monotypes.
-type Type = MonoType
 
 data TypeError = MissingAnnotation { name :: Lowercase }
                | MissingArgumentType { valueName :: String
@@ -175,10 +179,21 @@ typeLookup name env = case Map.lookup name env of
 -- abstract takes a typechecker type and returns a TypeSchema.
 -- It "abstracts over" a concrete type by replacing unification variables with
 -- forall-qualified variables.
-abstract :: Type -> TypeSchema
-abstract (T t) = T t
-abstract (F inn out) = F (abstract inn) (abstract out)
-abstract (H h) = absurd h
+abstract :: Type -> TC TypeSchema
+abstract (T t) = return (T t)
+abstract (F inn out) = F <$> abstract inn <*> abstract out
+-- TyVar case is actually tricky!
+--  - free tyvars can become foralls
+--  - bound tyvars must become their bound value
+abstract (H tyvar@(TyVar i)) = do
+  maybeMaybeTy <- Map.lookup tyvar <$> (get :: TC Store)
+  case maybeMaybeTy of
+   Nothing -> error "TyVar not in map???"
+   Just maybeTy ->
+     case maybeTy of
+      Nothing -> return (H ("x" ++ show i))
+      -- This only terminates if the substitution is acyclic!
+      Just ty -> abstract ty
 
 -- monoType just creates a non-polymorphic type schema.
 monoType :: MonoType -> TypeSchema
@@ -194,8 +209,7 @@ instantiate (F inn out) = do
   inn' <- instantiate inn
   out' <- instantiate out
   return (F inn' out')
-  
-instantiate (H _) = error "TODO implement polymorphism"
+instantiate (H _) = H <$> newTyVar
 
 
 checkProgram :: Program -> Program
@@ -281,7 +295,7 @@ checkPattern :: Env -> (Type, Pattern) -> TC Env
 -- When checking a pattern, typechecker-types flow in from the outmost form,
 -- and stop when they reach a hole. (This is like the dual of expressions!)
 -- 
-checkPattern _ (ty, Hole name) = return (Map.fromList [(name, abstract ty)])
+checkPattern _ (ty, Hole name) = Map.singleton name <$> abstract ty
 checkPattern env (ty, pat@(Constructor cname argpats)) = do
   ctype <- typeLookup cname env
   -- In contrast to zipPats,
