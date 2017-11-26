@@ -12,12 +12,17 @@ module TypeCheck (
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad (void)
+
 import Data.Map (Map)
-import Data.Void
 import qualified Data.Map as Map
+
+import qualified Data.Maybe as Maybe
+
+import Data.Void
+
 import Test.Hspec
 
-import Util
+import Util hiding (recover)
 import Model
 
 
@@ -25,14 +30,15 @@ testTypeCheck :: Spec
 testTypeCheck = do
   it "test error recovery" $ do
     -- I want a failed computation to not mess with the store.
-    let mutateThenFail :: TC Int
-        mutateThenFail = do
-          (do _ <- newTyVar
-              throwError (Unbound "ouch")
-            ) `catchError` (\_err -> return ())
-          Map.size <$> get
-    runTC mutateThenFail `shouldBe` Right 0
-
+    let mutateThenFail :: TC Stmt
+        mutateThenFail = do void newTyVar
+                            void (throwError (Unbound "ouch"))
+                            return (Expr (Var "success"))
+    runTC mutateThenFail `shouldBe` Left (Unbound "ouch")
+    recover mutateThenFail `shouldBe` Error (explain (Unbound "ouch"))
+    let mutateFailAndCatch = do (void mutateThenFail) `catchError` \_err -> return ()
+                                Map.size <$> get
+    runTC mutateFailAndCatch `shouldBe` Right 0
   let natDef = DefData "Nat" [Variant "Z" [], Variant "S" [T "Nat"]]
   let twoDef = DefVal "two" (Just (T "Nat")) [
         Case [] (App (Cst "S")  (App (Cst "S")  (App (Cst "S") (Cst "Z"))))]
@@ -118,7 +124,63 @@ runTC :: TC v -> Either TypeError v
 runTC (TC comp) = runExcept (evalStateT comp emptyStore)
 
 
-data TypeError = MissingAnnotation { name :: Lowercase }
+-- unify takes two types, which can contain unassigned tyvars,
+-- and mutates unassigned tyvars as necessary to make the types equal.
+unify :: Type -> Type -> TC ()
+unify t1 t2 = do t1' <- walk t1
+                 t2' <- walk t2
+                 unify' t1' t2'
+
+unifys :: [Type] -> [Type] -> TC ()
+unifys [] [] = return ()
+unifys (x:xs) (y:ys) = do unify x y; unifys xs ys
+unifys _ _ = error "unifys unequal lists"
+
+-- removes tyvar wrappers from the top level
+walk :: Type -> TC Type
+walk inputTy@(H tyvar) = do maybeTy <- derefTyVar tyvar
+                            case maybeTy of
+                             Nothing -> return inputTy
+                             Just boundTy -> walk boundTy
+-- any root constructor besides H is not a tyvar (so it's done).
+walk inputTy = return inputTy
+
+-- unify' assumes its two inputs have already been walked
+unify' :: Type -> Type -> TC ()
+unify' (T x)     (T y) | x == y = return ()
+unify' (F a b)   (F x y)        = do unify a x; unify b y
+unify' (H tyvar) ty             = assign tyvar ty
+unify' ty        (H tyvar)      = assign tyvar ty
+unify' t1        t2             = throwError (FailedToUnify t1 t2)
+
+-- assumes the input tyvar is unassigned.
+-- mutates the tyvar (by updating the Store),
+-- but first checks that the ty does not contain the given tyvar.
+-- This ensues that the store is acyclic, which is important
+-- so that walk terminates
+assign :: TyVar -> Type -> TC ()
+assign tyvar ty = do
+  if ty `containsTyVar` tyvar
+    then throwError (CyclicType tyvar ty)
+    else return ()
+  store <- (get :: TC Store)
+  let store' = Map.insert tyvar (Just ty) store
+  put store'
+  return ()
+
+containsTyVar :: Type -> TyVar -> Bool
+ty `containsTyVar` tyvar = tyvar `elem` holes ty
+
+holes :: TypeOf a -> [a]
+holes (T _) = []
+holes (F a b) = holes a ++ holes b
+holes (H h) = [h]
+
+data TypeError = FailedToUnify { left :: Type, right :: Type }
+               | CyclicType { tyvar :: TyVar, ty :: Type }
+               | NotASubtype { declared :: TypeSchema, inferred :: TypeSchema }
+                 
+               | MissingAnnotation { name :: Lowercase }
                | MissingArgumentType { valueName :: String
                                      , numPatterns :: Int
                                      , declaredType :: Type
@@ -144,6 +206,20 @@ data TypeError = MissingAnnotation { name :: Lowercase }
                deriving (Show, Eq)
 
 instance Explain TypeError where
+  explain (FailedToUnify { left, right }) =
+    "Failed to unify: " ++ show left ++ " with " ++ show right
+  explain (CyclicType { tyvar, ty }) =
+    "Can't construct the infinite type " ++ show (H tyvar) ++ "=" ++ show ty
+  -- TODO "subtype" is not the right word here. More like "instantiation".
+  -- We don't actually have 'subtyping': instead, a type schema represents a whole family of types.
+  -- If a value v has type (schema) T, then for *any* instantiation T' of T we can say v :: T'.
+  -- It's almost like v has an infinite intersection type!
+  -- id :: (a -> a) implies id :: (Int -> Int) *and* id :: (String -> String) *and* id :: (Foo -> Foo)...
+  -- Whereas with subtyping, if I say x :: Object,
+  -- it's absolutely false that x :: String *and* x :: Integer
+  -- (instead, at most one of these can be true).
+  explain (NotASubtype { declared, inferred }) =
+    "Inferred type " ++ show declared ++ " is not a subtype of " ++ show inferred
   explain (MissingAnnotation { name }) = "You need to write a type annotation for " ++ name
   explain (MissingArgumentType { valueName, numPatterns, declaredType }) =
     "This equation for " ++ valueName ++ " has " ++ show numPatterns ++ " arguments,"
@@ -169,12 +245,29 @@ instance Explain TypeError where
     "These types form a contravariant cycle: " ++ show typeNames
 
 
-type Env = Map String TypeSchema
+-- Env maps names-of-values to types.
+-- Globals always have a type schema.
+-- Locals always have a partially-inferred type (just "Type").
+newtype Env = Env { getEnv :: Map String (Either TypeSchema Type) }
 
+emptyEnv :: Env
+emptyEnv = Env (Map.empty)
+
+-- takes the name of a value (such as a constructor or local),
+-- and returns a typechecker-type for it.
+-- Automatically instantiates the type if it's a TypeSchema.
 typeLookup :: String -> Env -> TC Type
-typeLookup name env = case Map.lookup name env of
-  Just ty -> instantiate ty
+typeLookup name (Env env) = case Map.lookup name env of
   Nothing -> throwError (Unbound name)
+  Just (Left ts) -> instantiate ts
+  Just (Right t) -> return t
+
+derefTyVar :: TyVar -> TC (Maybe Type)
+derefTyVar tyvar = do
+  maybeMaybeTy <- Map.lookup tyvar <$> (get :: TC Store)
+  case maybeMaybeTy of
+   Nothing -> error "TyVar not in store???"
+   Just maybeTy -> return maybeTy 
 
 -- abstract takes a typechecker type and returns a TypeSchema.
 -- It "abstracts over" a concrete type by replacing unification variables with
@@ -186,14 +279,11 @@ abstract (F inn out) = F <$> abstract inn <*> abstract out
 --  - free tyvars can become foralls
 --  - bound tyvars must become their bound value
 abstract (H tyvar@(TyVar i)) = do
-  maybeMaybeTy <- Map.lookup tyvar <$> (get :: TC Store)
-  case maybeMaybeTy of
-   Nothing -> error "TyVar not in map???"
-   Just maybeTy ->
-     case maybeTy of
-      Nothing -> return (H ("x" ++ show i))
-      -- This only terminates if the substitution is acyclic!
-      Just ty -> abstract ty
+  maybeTy <- derefTyVar tyvar
+  case maybeTy of
+   Nothing -> return (H ("x" ++ show i))
+   -- This only terminates if the substitution is acyclic!
+   Just ty -> abstract ty
 
 -- monoType just creates a non-polymorphic type schema.
 monoType :: MonoType -> TypeSchema
@@ -224,107 +314,129 @@ checkProgram = converge checkProgramOnce
 checkProgramOnce :: Program -> Program
 checkProgramOnce prog =
   let env = unions (map scanStmt prog) in
-  map (checkStmtRecover env) prog
-
-checkStmtRecover :: Env -> Stmt -> Stmt
-checkStmtRecover env stmt = case runTC (checkStmt env stmt) of
-  Left err -> Error (explain err)
-  Right () -> stmt
+  map (checkStmt env) prog
 
 -- returns a partial environment
 scanStmt :: Stmt -> Env
 scanStmt (DefData tyname variants) = unions (map (scanVariant tyname) variants)
-scanStmt (DefVal _ Nothing _) = Map.empty
-scanStmt (DefVal vname (Just ty) _) = Map.fromList [(vname, ty)]
-scanStmt (Expr _) = Map.empty
-scanStmt (Error _) = Map.empty
+scanStmt (DefVal _ Nothing _) = emptyEnv
+scanStmt (DefVal vname (Just ty) _) = Env (Map.fromList [(vname, Left ty)])
+scanStmt (Expr _) = emptyEnv
+scanStmt (Error _) = emptyEnv
 
 scanVariant :: Uppercase -> Variant -> Env
-scanVariant tyname (Variant cname argtypes) = Map.fromList [(cname, monoType ctype)]
+scanVariant tyname (Variant cname argtypes) = Env$Map.fromList [(cname, Left (monoType ctype))]
   where ctype = makeFunctionType argtypes (T tyname)
 
-checkStmt :: Env -> Stmt -> TC ()
+-- checkStmt:
+--  - always succeeds,
+--  - always returns a new Stmt,
+--  - has no observable Store effects (no reads, no writes),
+--      because its inputs and outputs contain no references to Store.
+-- Therefore, it's safe to use 'recover' to run checkStmt
+-- in an empty store.
+checkStmt :: Env -> Stmt -> Stmt
 -- A defdata introduces no new constraints to check;
 -- we already handled it by creating the env.
-checkStmt _   (DefData _ _) = return ()
+checkStmt _   s@(DefData _ _) = s
 -- An expr we just check bottom-up.
 -- Ditto for un-annotated defs with no params and one case.
-checkStmt env (Expr expr) = void (checkExpr env expr)
-checkStmt env (DefVal _    Nothing [Case [] expr]) = void (checkExpr env expr)
--- Un-annotated defs in general are not supported yet.
--- We only do type checking, not type inference.
-checkStmt _   (DefVal name Nothing _) = throwError (MissingAnnotation name)
--- When there is an annotation, check each case against it.
-checkStmt env (DefVal name (Just ty) cases) = do
-  ty' <- instantiate ty
-  mapM_ (checkCase name env ty') cases
-checkStmt _   (Error _) = return ()
+checkStmt env (Expr expr) = recover $ do void (checkExpr env expr)
+                                         return (Expr expr)
+checkStmt env s@(DefVal name maybeDeclTy cases) = recover $ do
+  caseTypes <- mapM (checkCase env) cases
+  casesType <- H <$> newTyVar
+  mapM_ (unify casesType) caseTypes
+  inferredType <- abstract casesType
+  case maybeDeclTy of
+   -- No declared type -> fill in using the inferred type
+   Nothing -> return (DefVal name (Just inferredType) cases)
+   -- Declared type -> the declared type must be an instance of the inferred type
+   -- (If you declare (id) as (Int -> Int) that's ok,
+   -- because the declared type (Int -> Int)
+   -- is an instance of the inferred type (a -> a).
+   -- But if you declare (+ 1) as (a -> a) that's bad,
+   -- because the declared type (a -> a) is not an instance of (Int -> Int).
+   Just declaredType -> do declaredType `checkSubtypeOf` inferredType
+                           return s
+checkStmt _   s@(Error _) = s
 
-checkCase :: String -> Env -> Type -> Case -> TC ()
-checkCase name env ty (Case pats expr) = do
-  (typedPats, tyExpr) <- (zipPats ty pats
-                          `orFail` MissingArgumentType name (length pats) ty)
-  binds <- checkPatterns env typedPats
-  let env' = env `shadowedBy` binds
-  checkExprWithType env' expr tyExpr
+-- Run the given computation in an empty store,
+-- and replaces failure with an Error statement.
+recover :: TC Stmt -> Stmt
+recover comp = case runTC comp of
+  Right stmt -> stmt
+  Left err -> Error (explain err)
 
-shadowedBy :: Ord k => Map k v -> Map k v -> Map k v
-shadowedBy = flip Map.union
+checkSubtypeOf :: TypeSchema -> TypeSchema -> TC ()
+checkSubtypeOf ts1 ts2 = do
+  -- ts1 is a subtype of ts2 if they unify such that
+  -- all type variables in ts1 are left free.
+  -- If any type variables in ts1 need to be specialized to make them unify,
+  -- then ts1 can't be a subtype of ts2.
+  -- Also, if they don't unify at all then neither is a subtype of the other.
+  t1 <- instantiate ts1
+  t2 <- instantiate ts2
+  unify t1 t2 `catchError` \_err -> throwError (NotASubtype ts1 ts2)
+  let tyvars = holes t1
+  binds <- mapM derefTyVar tyvars
+  if any Maybe.isJust binds
+    then throwError (NotASubtype ts1 ts2)
+    else return ()
+  
+  
+-- (case (C1 x...) (C2 y...) -> e) is NOT like (C1 x...) and then (case (C2 y...) -> e).
+-- The difference is in the shadowing rules:
+-- 1. patterns must be linear (don't shadow other patterns)
+-- 2. patterns must shadow globals
+-- But I will cheat and allow shadowing. So a rule like f x x = x means f _ x = x.
+checkCase :: Env -> Case -> TC Type
+checkCase env (Case [] expr) = checkExpr env expr
+checkCase env (Case (pat0:pats) expr) = do
+  (headPatTy, headPatBinds) <- checkPattern env pat0
+  let env' = env `shadowedBy` headPatBinds
+  restCaseTy <- checkCase env' (Case pats expr)
+  return (F headPatTy restCaseTy)
+
+shadowedBy :: Env -> Env -> Env
+shadowedBy (Env outer) (Env inner) = Env (Map.union inner outer)
 
 
 -- TODO unions should return a type error instead when things collide
-unions :: Ord k => [Map k v] -> Map k v
-unions = Map.unionsWith (error "Map key collision")
+unionMaps :: Ord k => [Map k v] -> Map k v
+unionMaps = Map.unionsWith (error "Map key collision")
 
--- tries to zip the patterns with the function arguments.
--- will fail if there are more patterns than function arguments.
-zipPats :: Type -> [Pattern] -> Maybe ([(Type, Pattern)], Type)
-zipPats ty [] = Just ([], ty)
-zipPats (F inn out) (p0:ps) = case zipPats out ps of
-  Nothing -> Nothing
-  Just (pairs, final) -> Just ((inn, p0):pairs, final)
-zipPats _ (_:_) = Nothing
+unions :: [Env] -> Env
+unions envs = Env (unionMaps (map getEnv envs))
 
 
-checkPatterns :: Env -> [(Type, Pattern)] -> TC Env
-checkPatterns env typedPats = unions <$> mapM (checkPattern env) typedPats
+checkPatterns :: Env -> [Pattern] -> TC ([Type], Env)
+checkPatterns _ [] = return ([], emptyEnv)
+checkPatterns env (pat0:pats) = do
+  (ty0, binds0) <- checkPattern env pat0
+  (tys, bindss) <- checkPatterns env pats
+  return (ty0:tys, unions [binds0, bindss])
 
--- patterns are checked top-down.
--- returns a partial environment - only the new bindings
-checkPattern :: Env -> (Type, Pattern) -> TC Env
--- When checking a pattern, typechecker-types flow in from the outmost form,
--- and stop when they reach a hole. (This is like the dual of expressions!)
--- 
-checkPattern _ (ty, Hole name) = Map.singleton name <$> abstract ty
-checkPattern env (ty, pat@(Constructor cname argpats)) = do
+checkPattern :: Env -> Pattern -> TC (Type, Env)
+checkPattern _  (Hole name) = do
+  ty <- H <$> newTyVar
+  let binds = Env (Map.singleton name (Right ty))
+  return (ty, binds)
+checkPattern env (Constructor cname argpats) = do
   ctype <- typeLookup cname env
   -- In contrast to zipPats,
   -- here we check if the number of args exactly matches.
   let ctyArgs = typeArguments ctype
   let ctyResult = typeFinalResult ctype
-  if ctyResult /= ty
-    then throwError (PatternTypeMismatch { pattern = pat
-                                         , expectedType = ty
-                                         , actualType = ctyResult
-                                         })
-    else do
-      typedPats <- (tryZip ctyArgs argpats
-                    `orFail` ConstructorArity { cname = cname
-                                              , expectedNumArgs = length ctyArgs
-                                              , actualNumArgs = length argpats
-                                              })
-      checkPatterns env typedPats
-
-
-checkExprWithType :: Env -> Expr -> Type -> TC ()
-checkExprWithType env expr expectedType = do
-  actualType <- checkExpr env expr
-  if expectedType == actualType
+  if length ctyArgs == length argpats
     then return ()
-    else throwError (ExpressionTypeMismatch { expression = expr
-                                            , expectedType = expectedType
-                                            , actualType = actualType
-                                            })
+    else throwError (ConstructorArity { cname = cname
+                                      , expectedNumArgs = length ctyArgs
+                                      , actualNumArgs = length argpats
+                                      })
+  (argTys, binds) <- checkPatterns env argpats
+  unifys ctyArgs argTys
+  return (ctyResult, binds)
 
 
 -- expressions are checked bottom-up.
@@ -333,24 +445,7 @@ checkExpr env (Var name) = typeLookup name env
 checkExpr env (Cst name) = typeLookup name env
 checkExpr env (App callee arg) = do
   calleeType <- checkExpr env callee
-  (expectedArgType, result) <- case calleeType of
-                                (F inn out) -> return (inn, out)
-                                _ -> throwError (CallNonFunction { callee = callee
-                                                                 , calleeType = calleeType
-                                                                 , argument = arg
-                                                                 })
-  checkExprWithType env arg expectedArgType
-  return result
-
-
-tryZip :: [a] -> [b] -> Maybe [(a, b)]
-tryZip [] [] = return []
-tryZip (x:xs) (y:ys) = do
-  xys <- tryZip xs ys
-  return ((x, y):xys)
-tryZip _ _ = Nothing
-
-
-orFail :: Maybe good -> TypeError -> TC good
-orFail Nothing bad = throwError bad
-orFail (Just good) _ = return good
+  argType    <- checkExpr env arg
+  resultType <- H <$> newTyVar
+  unify calleeType (F argType resultType)
+  return resultType
