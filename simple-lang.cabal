@@ -59,6 +59,7 @@ executable simple-lang
                      , Print
                      , Termination
                      , TypeCheck
+                     , TypeInference
                      , WellFormedTypes
 
   -- LANGUAGE extensions used by modules in this package.

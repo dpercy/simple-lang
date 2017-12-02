@@ -60,12 +60,8 @@ testTypeCheck = do
                                                              (Var "x"))
                                                         (Var "y")))
           ]
-    let err = MissingArgumentType { valueName = "plus"
-                                  , numPatterns = 2
-                                  , declaredType = (F (T "Nat") (T "Nat"))
-                                  }
     checkProgram [natDef, twoDef, plusDefWrong]
-      `shouldBe` [natDef, twoDef, Error (explain err)]
+      `shouldBe` [natDef, twoDef, Error "TODO make better error explanations"]
   it "missing pattern type" $ do
     let plusDefWrong = DefVal "plus" (Just (F (T "Nat") (F (T "Nat") (T "Nat")))) [
           Case [Hole "y"] (Var "y"),
@@ -75,12 +71,8 @@ testTypeCheck = do
                                                              (Var "x"))
                                                         (Var "y")))
           ]
-    let err = ExpressionTypeMismatch { expression = (Var "y")
-                                     , expectedType = (F (T "Nat") (T "Nat"))
-                                     , actualType = (T "Nat")
-                                     }
     checkProgram [natDef, twoDef, plusDefWrong]
-      `shouldBe` [natDef, twoDef, Error (explain err)]
+      `shouldBe` [natDef, twoDef, Error "TODO make better error explanations"]
   it "shadowing" $ do
     let prog = [ DefData "Unit" [Variant "Unit"[]]
                , DefVal "id" (Just (F (T "Unit") (T "Unit"))) [
@@ -180,29 +172,11 @@ data TypeError = FailedToUnify { left :: Type, right :: Type }
                | CyclicType { tyvar :: TyVar, ty :: Type }
                | NotASubtype { declared :: TypeSchema, inferred :: TypeSchema }
                  
-               | MissingAnnotation { name :: Lowercase }
-               | MissingArgumentType { valueName :: String
-                                     , numPatterns :: Int
-                                     , declaredType :: Type
-                                     }
                | Unbound { name :: String }
                | ConstructorArity { cname :: Uppercase
                                   , expectedNumArgs :: Int
                                   , actualNumArgs :: Int
                                   }
-               | PatternTypeMismatch { pattern :: Pattern
-                                     , expectedType :: Type
-                                     , actualType :: Type
-                                     }
-               | CallNonFunction { callee :: Expr
-                                 , calleeType :: Type
-                                 , argument :: Expr
-                                 }
-               | ExpressionTypeMismatch { expression :: Expr
-                                        , expectedType :: Type
-                                        , actualType :: Type
-                                        }
-               | ContravariantTypeRecursion { typeNames :: [Uppercase] }
                deriving (Show, Eq)
 
 instance Explain TypeError where
@@ -220,11 +194,6 @@ instance Explain TypeError where
   -- (instead, at most one of these can be true).
   explain (NotASubtype { declared, inferred }) =
     "Inferred type " ++ show declared ++ " is not a subtype of " ++ show inferred
-  explain (MissingAnnotation { name }) = "You need to write a type annotation for " ++ name
-  explain (MissingArgumentType { valueName, numPatterns, declaredType }) =
-    "This equation for " ++ valueName ++ " has " ++ show numPatterns ++ " arguments,"
-    ++ " but its type (" ++ show declaredType ++ ")"
-    ++ " has " ++ show (length (typeArguments declaredType))
   explain (Unbound { name }) =
     name ++ " is not defined--or doesn't have an explicit type annotation--sorry! :("
   explain (ConstructorArity { cname, expectedNumArgs, actualNumArgs }) =
@@ -232,18 +201,6 @@ instance Explain TypeError where
     ++ nargs expectedNumArgs ++ " but has been given " ++ nargs actualNumArgs
     where nargs 1 = "1 argument"
           nargs n = show n ++ " arguments"
-  explain (PatternTypeMismatch { pattern, expectedType, actualType }) =
-    "The pattern `" ++ show pattern ++ "` is supposed to have type " ++ show expectedType
-    ++ " but actually has type " ++ show actualType
-  explain (CallNonFunction { callee, calleeType, argument }) =
-    "You tried to apply `" ++ show callee ++ "` to `" ++ show argument
-    ++ " but the callee is not a function; it has type " ++ show calleeType
-  explain (ExpressionTypeMismatch { expression, expectedType, actualType }) =
-    "The expression `" ++ show expression ++ "` is supposed to have type " ++ show expectedType
-    ++ " but actually has type " ++ show actualType
-  explain (ContravariantTypeRecursion { typeNames }) =
-    "These types form a contravariant cycle: " ++ show typeNames
-
 
 -- Env maps names-of-values to types.
 -- Globals always have a type schema.
@@ -335,6 +292,43 @@ scanVariant tyname (Variant cname argtypes) = Env$Map.fromList [(cname, Left (mo
 --      because its inputs and outputs contain no references to Store.
 -- Therefore, it's safe to use 'recover' to run checkStmt
 -- in an empty store.
+{-
+
+TODO this is wrong.
+For example, try runnin the demo server and erasing the type decl for "plus".
+Any statement that uses "plus" gets a type error.
+
+This checkStmt isolates the TC state to a single statement.
+That's wrong!
+Instead, constraints from many call sites help determine the type
+of an identifier, which we want to insert at its def site.
+
+The definition of scanStmt assumes we know the type decls at the start,
+but that's exactly wrong.
+Instead, the env needs to hold the *partially-known* type of each identifier
+as we discover and solve new constraints.
+
+But at the same time, we need to keep the constraints separate somehow!
+Because you want "map" and "id" to be polymorphic.
+((id id) 1) must work.
+
+
+id :: ?
+id x = x  -- id has type  checkCase (\x -> x)
+
+((id_1 id_2) 1)
+
+
+
+Maybe this would all be easier by explicitly generating constraints!
+You can use a monad for fresh variables and writing constraints.
+Explicit constraints might also make it easier to make good error messages,
+by putting metadata in the constraints.
+
+
+
+
+-}
 checkStmt :: Env -> Stmt -> Stmt
 -- A defdata introduces no new constraints to check;
 -- we already handled it by creating the env.
