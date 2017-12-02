@@ -1,96 +1,19 @@
 
-Total Functional Programming experiment:
+Pure Functional Programming experiment:
 
-- Every valid expression must evaluate to a value.
-    - The system must reject any program that doesn't halt.
-    - Unfortunately this means the system will reject some valid programs too.
+- Every expression must either:
+    - evaluate to a value
+    - diverge
+    - crash
 
-- Many evaluation strategies are possible:
-    - A naive tree rewriter (which could also work on open terms)
-    - Transliterate to a strict untyped language (Scheme or JS)
-    - Compile to a GC-free subset of JS or Webassembly (certain types only)
-    - Compile to GLSL (certain types only)
+- Goal 1: notebook
+    - free-form like ipython
+    - consistent like a spreadsheet
+    - output shows each def/expr as "done", "running", or "crashed"
 
-
-TODO list:
-
-rough implementation:
-- parsing/printing
-    - DONE parse
-    - pretty-print
-- totality checker - 4 components:
-    - DONE well-formed types checker
-    - DONE typechecker
-    - DONE case coverage checker (prevents crashing)
-    - DONE termination checker (recursive args must decrease)
-        - this algo? http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.44.3494&rep=rep1&type=pdf
-- DONE rewrite-based evaluator
-    - treat defval equations as rewrite rules
-    - just use uniplate
-
-- DONE (first pass) notebook
-    - DONE constantly recompute the type and value of every def (and expr)
-        - better than Jupyter, which requires you to manually re-update cells
-
-    - DONE don't let a bad def prevent you from checking/running other defs
-        - this means all static checks (typechecking, case coverage, well-founded-recursion)
-	  must mark individual definitions as failed instead of the whole program
-
-    - easy impl: use CodeMirror's line widgets to display the output below each expr
-        - neat UX because it's just like a repl, only faster and self-updating!
-
-    - use a server :: MixedProgram -> Something
-       where MixedProgram is actually [Either Def Expr]
-       where Something tells you:
-         - line number ranges for each def-or-expr
-	 - which definitions have type errors
-	 - which definitions have a value
-	 -
-
-- polymorphism
-http://www.cs.cornell.edu/courses/cs312/2005sp/lectures/rec22.asp
-    - need type variables
-    - need data definitions to allow type parameters and type variables
-    - can we still do type checking (not inference)?
-    - should probably reread sections of PLAI and TAPL
-      - may want to break this up - do parameterized types first, then polymorphic functions later?
-also read this: https://people.mpi-sws.org/~rossberg/1ml/
-"1ML" is like System F-omega but more usable and with (partial) type inference
-
-
-- trace viewer
-    - like "resugaring", except instead of macros we have normal function calls
-    - map f [1,2,3]  steps immediately to  [f 1, f 2, f 3]  if we hide map
-        - even if map is defined in terms of fold
-    - or
-
-
-- JS evaluator
-    - try representing Nat as a plain integer
-        - on overflow, crash
-            - every implementation must either match the semantics,
-              or fail.
-            - failure is not part of the semantics,
-              but is an unavoidable part of some machines.
-
-
-- make some simple animations and games
-    - try doing FRP (Conal Eliott style), but use Floats...?
-        - proof that rationals aren't enough: (getX (normalize (vec2 1 1))) ==  1/(sqrt 2)
-	- continued fractions probably use too much space
-	- is there a way to use floats but still get the right answer?
-	    - maybe if a number is destined for the screen, precision doesn't matter
-	    - only if a number is destined for some stark comparison (event defined as predicate on behavior)
-	      does it matter to get precisely the right answer
-                - problem is collisions are ubiquitous
-	- OR, make rounding explicit?
-	    - operations like sqrt would return a true "real", which isn't representable on some machines.
-	    - you would explicitly round to the nearest float, or nearest nth continued fraction or whatever.
-	    - algebra would make sense because the explicit rounding would explain why things don't commute, etc.
-
-
-- language features
-    - typeclasses (or polytypic functions??)
-        - necessary for safe generic equality, sorting, etc
-	- useful for sequencing operators for different types of actions
-	- 
+- Goal 2: alt backends
+    - expandable debug trace
+    - JS
+    - asm.js or Webassembly
+    - GLSL
+- 
