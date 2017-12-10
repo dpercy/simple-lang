@@ -92,6 +92,7 @@ syntax:
 (struct Local Expr (name) #:transparent)
 (struct Global Expr (name) #:transparent)
 (struct Call Expr (func args) #:transparent)
+(struct Named Expr (named value) #:transparent)
 
 
 (struct Match Expr (scrutinee cases) #:transparent)
@@ -149,6 +150,10 @@ Dag ops:
                                ; if all args are values and func is a non-constructor value,
                                ; the Call is a redex.
                                ['value  (apply-exprs func args globals)])])])]
+    [(Named name value) (match (step value globals)
+                          ['value 'value]
+                          ['constructor 'constructor]
+                          [(? Expr?) (error 'step "got a named non-value: ~v = ~v" name value)])]
     [(Match expr cases) (error 'TODO "impl step match")]
     [_ #false]))
 (define/contract (step* exprs globals) (-> (listof Expr?) globals? (or/c 'all-values (listof Expr?)))
@@ -163,10 +168,18 @@ Dag ops:
   (match func
     [(Global func-name) (match (hash-ref globals func-name)
                           [(DefFun name params body) #:when (= (length params) (length args))
-                           (let ([expr (subst body (make-subst params args))])
+                           (let ([expr (subst body (make-subst/named params args))])
                              (eval expr globals))])]))
 
 (define subst? (hash/c symbol? Expr?))
+(define/contract (make-subst/named params args) (-> (listof symbol?) (listof Expr?) subst?)
+  ; Create a substitution that maps each param to a "named" node.
+  ; Later, while pretty-printing, any named nodes that are identical (equal?)
+  ; can be displayed as shared.
+  (make-subst params
+              (for/list ([p params]
+                         [a args])
+                (Named p a))))
 (define/contract (make-subst params args) (-> (listof symbol?) (listof Expr?) subst?)
   (for/hash ([p params]
              [a args])
@@ -213,42 +226,44 @@ Dag ops:
                                        env))
                 (list (Call (Global 'triple) (list (Call (Global 'Empty) '())))
                       ; terminates in one step: one function application
-                      (Call (Global 'Cons)
-                            (list (Call (Global 'Empty) '())
-                                  (Call (Global 'Cons)
-                                        (list (Call (Global 'Empty) '())
-                                              (Call (Global 'Cons)
-                                                    (list (Call (Global 'Empty) '())
-                                                          (Call (Global 'Empty) '())))))))))
+                      (let ([elem (Named 'elem (Call (Global 'Empty) '()))])
+                        (Call (Global 'Cons)
+                              (list elem
+                                    (Call (Global 'Cons)
+                                          ; TODO is the double-wrapping a problem?
+                                          (list (Named 'elem elem)
+                                                (Call (Global 'Cons)
+                                                      (list (Named 'elem elem)
+                                                            (Call (Global 'Empty) '()))))))))))
   (check-equal? (stream->list (evalseq (Call (Global 'double)
                                              (list (Call (Global 'double)
                                                          (list (Call (Global 'Empty) '())))))
                                        env))
-                ; two steps: one per application of 'double
+
                 (list (Call (Global 'double)
                             (list (Call (Global 'double)
                                         (list (Call (Global 'Empty) '())))))
-                      ; first the inner call gets reduced
+                      ; first step: reduce inner call
                       (Call (Global 'double)
-                            (list (Call (Global 'Cons)
-                                        (list (Call (Global 'Empty) '())
-                                              (Call (Global 'Cons)
-                                                    (list (Call (Global 'Empty) '())
-                                                          (Call (Global 'Empty) '())))))))
-                      ; then the outer call
-                      (Call (Global 'Cons)
-                            (list (Call (Global 'Cons)
-                                        (list (Call (Global 'Empty) '())
-                                              (Call (Global 'Cons)
-                                                    (list (Call (Global 'Empty) '())
-                                                          (Call (Global 'Empty) '())))))
-                                  (Call (Global 'Cons)
-                                        (list (Call (Global 'Cons)
-                                                    (list (Call (Global 'Empty) '())
-                                                          (Call (Global 'Cons)
-                                                                (list (Call (Global 'Empty) '())
-                                                                      (Call (Global 'Empty) '())))))
-                                              (Call (Global 'Empty) '())))))))
+                            (list (let ([elem (Named 'elem (Call (Global 'Empty) '()))])
+                                    (Call (Global 'Cons)
+                                          (list elem
+                                                (Call (Global 'Cons)
+                                                      (list elem
+                                                            (Call (Global 'Empty) '()))))))))
+                      ; second step: reduce outer call
+                      (let ([elem2 (Named 'elem
+                                          (let ([elem (Named 'elem (Call (Global 'Empty) '()))])
+                                            (Call (Global 'Cons)
+                                                  (list elem
+                                                        (Call (Global 'Cons)
+                                                              (list elem
+                                                                    (Call (Global 'Empty) '())))))))])
+                        (Call (Global 'Cons)
+                              (list elem2
+                                    (Call (Global 'Cons)
+                                          (list elem2
+                                                (Call (Global 'Empty) '()))))))))
 
   ;;
   )
