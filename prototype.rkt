@@ -39,49 +39,6 @@ syntax:
 | (<constructor> <pat> ...)
 |#
 
-#;(
-   #|
-
-   What's the meaning of an expression?
-   Not just the final value--some expressions don't have one!
-   It's the whole evaluation sequence.
-   It's not just a flat sequence either: there's a top-level evalsequence,
-   but you can expand individual function calls to ask why (f 1 2 3) ==> 4.
-
-   So there are two functions:
-   - eval :: globals -> expression -> value
-   - evalseq :: globals -> expression -> evaluation-sequence
-   Evalseq uses apply to produce the individual steps.
-   Eval could use evalseq and throw away the intermediate results:
-   but a more efficient implementation should just compute the final result directly.
-
-   Fine, so what operations / expressions are supported?
-   - literals are easy
-   - primops are pretty easy
-   - application is easy
-   - if/cond is easy, but hard to typecheck (Typed Racket!)
-   .    - also: htdp says "cond is the most complicated expression form in this book"
-   - match adds a scoping rule
-   .    - more complicated than cond!
-   - functions-as-cases seems hard to explain - some functions don't use cases
-
-
-
-   TODO:
-   - group the env with the expr
-   .   - smart printer can decide which to subst, which to define in a margin
-   - eval-program gives a bunch of thunks (or callables)
-   .   - if one of them diverges but is unused, it doesn't affect anything else
-   .   - separately, the caller can run each thunk in a future to get all the terminating ones
-   .   - maybe tracing is an optional side effect of the callables?
-   .        - this viewpoint is neat because you can always just rerun with more tracing enabled
-
-
-   |#
-
-
-   )
-
 (struct Stmt () #:transparent)
 (struct Def Stmt () #:transparent)
 (struct DefVal Def (name expr) #:transparent)
@@ -92,7 +49,6 @@ syntax:
 (struct Local Expr (name) #:transparent)
 (struct Global Expr (name) #:transparent)
 (struct Call Expr (func args) #:transparent)
-(struct Named Expr (name value) #:transparent)
 
 
 (struct Match Expr (scrutinee cases) #:transparent)
@@ -103,213 +59,212 @@ syntax:
 (struct PatHole (name) #:transparent)
 (struct PatCtor (name args) #:transparent)
 
-
 #|
 
-Dag ops:
-
-- peel back the outer layer of substitutions so you can break out the children
-- use a dag as an argument in a new term
-
-- traverse the dag (for example to replace the first (+ 1 1) you find with 2),
-.  preserving sharing (so that
+Goal: produce an executable implementation for the notebook UI.
+- when you "run" an expression you get a Racket computation, which can
+.   - halt with a value
+.   - diverge
+.   - raise an error
+- when you evaluate a program you get a set of thunks
+.   - some thunks might depend on each other
+.   - some thunks might throw or diverge
+.   - the caller can use futures to force thunks carefully
 
 |#
 
-(define globals? (hash/c symbol? Def?))
-(define (last seq)
-  (for/last ([elem seq])
-    elem))
-
-(define/contract (eval expr globals) (-> Expr? globals? Expr?)
-  ; TODO eval would be faster as a big-step interpreter.
-  (last (evalseq expr globals)))
-(define/contract (evalseq expr globals) (-> Expr? globals? (sequence/c Expr?))
-  (match (step expr globals)
-    ['value (stream expr)]
-    [expr* (stream-cons expr (evalseq expr* globals))]))
-(define/contract (step expr globals) (-> Expr? globals? (or/c 'value 'constructor Expr?))
-  (match expr
-    [(Local name) (error 'step "unbound local ~v" name)]
-    [(Global name) (match (hash-ref globals name)
-                     [(? DefStruct?) 'constructor]
-                     [(? DefFun?) 'value]
-                     [(DefVal _ expr) expr])]
-    [(Call func args)  (match (step func globals)
-                         ; if func can step, it steps
-                         [(? Expr? func*)  (Call func* args)]
-                         [value-or-constructor
-                          (match (step* args globals)
-                            ; if any arg can step, it steps
-                            [(? list? args*)  (Call func args*)]
-                            ['all-values
-                             (match value-or-constructor
-                               ; if all args are values and func is a constructor,
-                               ; the Call is a value (a construction).
-                               ['constructor 'value]
-                               ; if all args are values and func is a non-constructor value,
-                               ; the Call is a redex.
-                               ['value  (apply-exprs func args globals)])])])]
-    [(Named name value) (match (step value globals)
-                          ['value 'value]
-                          ['constructor 'constructor]
-                          [(? Expr?) (error 'step "got a named non-value: ~v = ~v" name value)])]
-    [(Match expr cases) (error 'TODO "impl step match")]
-    [_ #false]))
-(define/contract (step* exprs globals) (-> (listof Expr?) globals? (or/c 'all-values (listof Expr?)))
-  (match exprs
-    ['() 'all-values]
-    [(cons e es) (match (step e globals)
-                   [(or 'value 'constructor) (match (step* es globals)
-                                               ['all-values 'all-values]
-                                               [es* (cons e es*)])]
-                   [(? Expr? e*) (cons e* es)])]))
-(define/contract (apply-exprs func args globals) (-> Expr? (listof Expr?) globals? Expr?)
-  (match func
-    [(Global func-name) (match (hash-ref globals func-name)
-                          [(DefFun name params body) #:when (= (length params) (length args))
-                           (let ([expr (subst body (make-subst/named params args))])
-                             (eval expr globals))])]))
-
-(define subst? (hash/c symbol? Expr?))
-(define/contract (make-subst/named params args) (-> (listof symbol?) (listof Expr?) subst?)
-  ; Create a substitution that maps each param to a "named" node.
-  ; Later, while pretty-printing, any named nodes that are identical (equal?)
-  ; can be displayed as shared.
-  (make-subst params
-              (for/list ([p params]
-                         [a args])
-                (make-named p a))))
-(define (make-named name value)
-  (match value
-    [(Named _ v) (make-named name v)]
-    [v (Named name v)]))
-(define/contract (make-subst params args) (-> (listof symbol?) (listof Expr?) subst?)
-  (for/hash ([p params]
-             [a args])
-    (values p a)))
-(define/contract (subst expr h) (-> Expr? subst? Expr?)
-  (match expr
-    [(Local name) (hash-ref h name (lambda () expr))]
-    [(Global _) expr]
-    [(Call f args) (Call (subst f h)
-                         (for/list ([a args])
-                           (subst a h)))]
-    [(Match e cases)
-     (Match e (for ([c cases])
-                (subst-case c h)))]))
-(define/contract (subst-case case h) (-> Case? subst? Case?)
+(define kw? (or/c 'def 'struct 'match))
+(define name? (and/c symbol? (not/c kw?)))
+(define (parse sexpr) ; -> stmt
+  (match sexpr
+    [`(def ,(? name? name) ,v) (DefVal name (parse-expr v (set)))]
+    [`(def (,(? name? name) ,(? name? params) ...) ,body)
+     (DefFun name params (parse-expr body (list->set params)))]
+    [`(struct ,(? name? name) ,(? number? arity))
+     (DefStruct name arity)]
+    [_ (parse-expr sexpr (set))]))
+(define (parse-expr sexpr locals)
+  (match sexpr
+    [(? name? name) (if (set-member? locals name)
+                        (Local name)
+                        (Global name))]
+    [(cons (? (not/c kw?) func) args)
+     (Call (parse-expr func locals)
+           (for/list ([a args])
+             (parse-expr a locals)))]
+    [`(match ,scrutinee ,cases ...)
+     (Match (parse-expr scrutinee locals)
+            (for/list ([c cases])
+              (parse-case c locals)))]))
+(define (parse-case case locals)
   (match case
-    [(Case pat expr)  (Case pat
-                            (subst expr
-                                   (hash-remove* h (pat-binders pat))))]))
-(define (hash-remove* h keys)
-  (for/fold ([h h]) ([k keys])
-    (hash-remove h k)))
-
-(define/contract (pat-binders pat) (-> Pat? (set/c symbol?))
+    [(list lhs rhs) (let ([pat (parse-pat lhs)])
+                      (Case pat
+                            (parse-expr rhs
+                                        (set-union (pat-holes pat)
+                                                   locals))))]))
+(define (parse-pat pat)
+  (match pat
+    [(? name? name) (PatHole name)]
+    [(list* (? name? name) args) (PatCtor name (map parse-pat args))]))
+(define (pat-holes pat)
   (match pat
     [(PatHole name) (set name)]
-    [(PatCtor _ args) (foldr set-union (set) args)]))
+    [(PatCtor _ args) (foldr set-union (set) (map pat-holes args))]))
+
+(define (render term)
+  (define r render)
+  (match term
+    [(DefVal name val) `(def ,name ,(r val))]
+    [(DefFun name ps b) `(def (,name ,@ps) ,(r b))]
+    [(DefStruct name arity) `(struct ,name ,arity)]
+    [(Local name) name]
+    [(Global name) name]
+    [(Call func args) (cons (r func) (map r args))]
+    [(Match scr cases) `(match ,(r scr) ,@(map r cases))]
+    [(Case pat expr) `[,(r pat) ,(r expr)]]
+    [(PatHole name) name]
+    [(PatCtor name args) `(,name ,@(map r args))]))
 
 (module+ test
 
-  (define env (hash 'Cons (DefStruct 'Cons 2)
-                    'Empty (DefStruct 'Empty 0)
-                    'double (DefFun 'double '(elem)
-                              (Call (Global 'Cons)
-                                    (list (Local 'elem)
-                                          (Call (Global 'Cons)
-                                                (list (Local 'elem)
-                                                      (Call (Global 'Empty) '()))))))
-                    'triple (DefFun 'double '(elem)
-                              (Call (Global 'Cons)
-                                    (list (Local 'elem)
-                                          (Call (Global 'double) (list (Local 'elem))))))))
-  (check-equal? (stream->list (evalseq (Call (Global 'triple) (list (Call (Global 'Empty) '())))
-                                       env))
-                (list (Call (Global 'triple) (list (Call (Global 'Empty) '())))
-                      ; terminates in one step: one function application
-                      (let ([elem (Named 'elem (Call (Global 'Empty) '()))])
-                        (Call (Global 'Cons)
-                              (list elem
-                                    (Call (Global 'Cons)
-                                          (list elem
-                                                (Call (Global 'Cons)
-                                                      (list elem
-                                                            (Call (Global 'Empty) '()))))))))))
-  (check-equal? (stream->list (evalseq (Call (Global 'double)
-                                             (list (Call (Global 'double)
-                                                         (list (Call (Global 'Empty) '())))))
-                                       env))
+  (define prog-src
+    '[
+      (struct Zero 0)
+      (struct Succ 1)
+      (def (plus x y)
+        (match x
+          [(Zero) y]
+          [(Succ xx) (Succ (plus xx y))]))
+      (def one (Succ (Zero)))
+      (def two (Succ one))
+      (plus two one)
+      ;
+      ])
+  (define prog (map parse prog-src))
+  (check-equal? prog
+                (list
+                 (DefStruct 'Zero 0)
+                 (DefStruct 'Succ 1)
+                 (DefFun 'plus '(x y)
+                   (Match
+                    (Local 'x)
+                    (list
+                     (Case (PatCtor 'Zero '()) (Local 'y))
+                     (Case (PatCtor 'Succ (list (PatHole 'xx)))
+                           (Call (Global 'Succ)
+                                 (list (Call (Global 'plus)
+                                             (list (Local 'xx)
+                                                   (Local 'y)))))))))
+                 (DefVal 'one (Call (Global 'Succ)
+                                    (list (Call (Global 'Zero) '()))))
+                 (DefVal 'two (Call (Global 'Succ)
+                                    (list (Global 'one))))
+                 (Call (Global 'plus)
+                       (list (Global 'two) (Global 'one)))))
 
-                (list (Call (Global 'double)
-                            (list (Call (Global 'double)
-                                        (list (Call (Global 'Empty) '())))))
-                      ; first step: reduce inner call
-                      (Call (Global 'double)
-                            (list (let ([elem (Named 'elem (Call (Global 'Empty) '()))])
-                                    (Call (Global 'Cons)
-                                          (list elem
-                                                (Call (Global 'Cons)
-                                                      (list elem
-                                                            (Call (Global 'Empty) '()))))))))
-                      ; second step: reduce outer call
-                      (let ([elem2 (Named 'elem
-                                          (let ([elem (Named 'elem (Call (Global 'Empty) '()))])
-                                            (Call (Global 'Cons)
-                                                  (list elem
-                                                        (Call (Global 'Cons)
-                                                              (list elem
-                                                                    (Call (Global 'Empty) '())))))))])
-                        (Call (Global 'Cons)
-                              (list elem2
-                                    (Call (Global 'Cons)
-                                          (list elem2
-                                                (Call (Global 'Empty) '()))))))))
+  (check-equal? (map render prog)
+                prog-src)
 
   ;;
   )
 
-(define (print-expr expr)
-  (define where (hasheq)) ; named-expr -> printed
-  (define renamed (hasheq)) ; named-expr -> new-name
+(struct Process (name thunk) #:transparent)
+(define runnable-program? (listof (or/c DefFun? DefStruct? Process?)))
+(define/contract (eval-program stmts) (-> (listof Stmt?) runnable-program?)
+  (define program
+    (for/list ([s stmts])
+      (match s
+        [(? DefFun?) s]
+        [(? DefStruct?) s]
+        [(DefVal name expr)  (Process name
+                                      (delay/sync
+                                       (run-expr expr (hash) globals)))]
+        [(? Expr? expr)  (Process #false
+                                  (delay/sync
+                                   (run-expr expr (hash) globals)))])))
+  (define globals
+    (for/hash ([s program]
+               #:when (or (Def? s)
+                          (and (Process? s)
+                               (Process-name s))))
+      (match s
+        [(DefStruct name _) (values name s)]
+        [(DefFun name _ _)  (values name s)]
+        [(Process name _)   (values name s)])))
+  program)
+(define (run-expr expr locals globals)
+  (match expr
+    ; locals map to a value
+    [(Local name) (hash-ref locals name)]
+    ; globals can map to:
+    ; - a running DefVal  (a future)
+    ; - a static DefStruct
+    ; - a static DefFun
+    [(Global name) (match (hash-ref globals name)
+                     [(Process _ thunk) (force thunk)]
+                     [(DefStruct _ _) expr]
+                     [(DefFun _ _ _) expr])]
+    [(Call func args) (match (run-expr* (cons func args) locals globals)
+                        [(cons (Global name) args)
+                         (match (hash-ref globals name)
+                           [(DefStruct _ arity) #:when (= arity (length args))
+                            (Call (Global name) args)]
+                           [(DefFun _ params body)
+                            (run-expr body
+                                      (for/fold ([locals locals]) ([p params]
+                                                                   [a args])
+                                        (hash-set locals p a))
+                                      globals)])])]
+    [(Match scrutinee cases) (let ([value (run-expr scrutinee locals globals)])
+                               (apply-cases value cases locals globals))]))
+(define (run-expr* exprs locals globals)
+  (for/list ([e exprs])
+    (run-expr e locals globals)))
+(define (apply-cases value cases locals globals)
+  (match cases
+    ['() (error 'run-expr "no case for: ~v" value)]
+    [(cons (Case pat rhs) cases)
+     (match (try-destructure pat value)
+       [#false (apply-cases value cases locals globals)]
+       [new-locals (run-expr rhs
+                             (hash-append new-locals locals)
+                             globals)])]))
+(define (try-destructure pat value)
+  (match pat
+    [(PatHole name) (hash name value)]
+    [(PatCtor cname argpats)
+     (match value
+       [(Call (Global (== cname)) args) #:when (= (length args)
+                                                  (length argpats))
+        (try-destructure* argpats args)]
+       [_ #false])]))
+(define (try-destructure* pats vals)
+  (match* {pats vals}
+    [{'() '()} (hash)]
+    [{(cons pat0 pats)
+      (cons val0 vals)} (match (try-destructure pat0 val0)
+                          [#false #false]
+                          [h1 (match (try-destructure* pats vals)
+                                [#false #false]
+                                [h2 (hash-append h1 h2)])])]))
+(define (hash-append h1 h2)
+  (for/fold ([h2 h2])
+            ([{k v} (in-hash h1)])
+    (hash-set h2 k v)))
 
-  (define counter 0)
-  (define (gensym name)
-    (define n counter)
-    (set! counter (+ counter 1))
-    (string->uninterned-symbol (format "~s:~s" name n)))
+(module+ test
 
-  (define v
-    (let recur ([expr expr])
-      (match expr
-        [(Local name) name]
-        [(Global name) name]
-        [(Call func args) (cons (recur func)
-                                (map recur args))]
-        [(Named name value)
-         (if (hash-has-key? where expr)
-             ; we already printed this one
-             (hash-ref renamed expr)
-             ; print it
-             (let ()
-               (define new-name (gensym name))
-               (define v (recur value))
-               (set! where
-                     (hash-set where expr v))
-               (set! renamed
-                     (hash-set renamed expr new-name))
-               new-name))]
-        [(Match _ _) (error 'TODO "print-expr match")])))
-  (if (hash-empty? where)
-      v
-      `[#:val ,v #:where ,@(for/list ([{k v} (in-hash where)])
-                             `(def ,(hash-ref renamed k) ,v))]))
+  (define runnable-prog (eval-program prog))
+  (check-equal?
+   (force (Process-thunk (last runnable-prog)))
+   (Call (Global 'Succ)
+         (list
+          (Call (Global 'Succ)
+                (list
+                 (Call (Global 'Succ)
+                       (list
+                        (Call (Global 'Zero) '()))))))))
 
-#|
-TODO now produce an evaluation sequence for a whole program (list of statements):
-- each statement produces its own separate stream
-- one possible step is global lookup, which requires doing a "last" on a
-.  possibly-nonterminating sequence
-|#
+  ;;
+  )
