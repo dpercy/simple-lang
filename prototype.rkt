@@ -92,7 +92,7 @@ syntax:
 (struct Local Expr (name) #:transparent)
 (struct Global Expr (name) #:transparent)
 (struct Call Expr (func args) #:transparent)
-(struct Named Expr (named value) #:transparent)
+(struct Named Expr (name value) #:transparent)
 
 
 (struct Match Expr (scrutinee cases) #:transparent)
@@ -179,7 +179,11 @@ Dag ops:
   (make-subst params
               (for/list ([p params]
                          [a args])
-                (Named p a))))
+                (make-named p a))))
+(define (make-named name value)
+  (match value
+    [(Named _ v) (make-named name v)]
+    [v (Named name v)]))
 (define/contract (make-subst params args) (-> (listof symbol?) (listof Expr?) subst?)
   (for/hash ([p params]
              [a args])
@@ -230,10 +234,9 @@ Dag ops:
                         (Call (Global 'Cons)
                               (list elem
                                     (Call (Global 'Cons)
-                                          ; TODO is the double-wrapping a problem?
-                                          (list (Named 'elem elem)
+                                          (list elem
                                                 (Call (Global 'Cons)
-                                                      (list (Named 'elem elem)
+                                                      (list elem
                                                             (Call (Global 'Empty) '()))))))))))
   (check-equal? (stream->list (evalseq (Call (Global 'double)
                                              (list (Call (Global 'double)
@@ -267,3 +270,46 @@ Dag ops:
 
   ;;
   )
+
+(define (print-expr expr)
+  (define where (hasheq)) ; named-expr -> printed
+  (define renamed (hasheq)) ; named-expr -> new-name
+
+  (define counter 0)
+  (define (gensym name)
+    (define n counter)
+    (set! counter (+ counter 1))
+    (string->uninterned-symbol (format "~s:~s" name n)))
+
+  (define v
+    (let recur ([expr expr])
+      (match expr
+        [(Local name) name]
+        [(Global name) name]
+        [(Call func args) (cons (recur func)
+                                (map recur args))]
+        [(Named name value)
+         (if (hash-has-key? where expr)
+             ; we already printed this one
+             (hash-ref renamed expr)
+             ; print it
+             (let ()
+               (define new-name (gensym name))
+               (define v (recur value))
+               (set! where
+                     (hash-set where expr v))
+               (set! renamed
+                     (hash-set renamed expr new-name))
+               new-name))]
+        [(Match _ _) (error 'TODO "print-expr match")])))
+  (if (hash-empty? where)
+      v
+      `[#:val ,v #:where ,@(for/list ([{k v} (in-hash where)])
+                             `(def ,(hash-ref renamed k) ,v))]))
+
+#|
+TODO now produce an evaluation sequence for a whole program (list of statements):
+- each statement produces its own separate stream
+- one possible step is global lookup, which requires doing a "last" on a
+.  possibly-nonterminating sequence
+|#
