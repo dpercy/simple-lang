@@ -1,4 +1,5 @@
 #lang racket
+(require (only-in racket/exn exn->string))
 (module+ test (require rackunit))
 
 (module helpers racket/base
@@ -124,7 +125,17 @@ Goal: produce an executable implementation for the notebook UI.
     [(Match scr cases) `(match ,(r scr) ,@(map r cases))]
     [(Case pat expr) `[,(r pat) ,(r expr)]]
     [(PatHole name) name]
-    [(PatCtor name args) `(,name ,@(map r args))]))
+    [(PatCtor name args) `(,name ,@(map r args))]
+    ; cheating a bit here by rendering a Process
+    [(Process (? name? name) thunk) `(def ,name ,(r (Process #false thunk)))]
+    [(Process #false thunk)
+     (cond
+       [(promise-forced? thunk) (match (with-handlers ([exn:fail? (lambda (e) e)])
+                                         (force thunk))
+                                  [(? exn:fail? exn) (exn->string exn)]
+                                  [(? Expr? expr) (render expr)])]
+       [(promise-running? thunk) '#:running]
+       [else '#:not-started])]))
 
 (module+ test
 
@@ -138,6 +149,8 @@ Goal: produce an executable implementation for the notebook UI.
           [(Succ xx) (Succ (plus xx y))]))
       (def one (Succ (Zero)))
       (def two (Succ one))
+      (def irrelevant (Succ (Zero)))
+      (def irrelevant-fail (plus Succ Succ))
       (plus two one)
       ;
       ])
@@ -160,6 +173,11 @@ Goal: produce an executable implementation for the notebook UI.
                                     (list (Call (Global 'Zero) '()))))
                  (DefVal 'two (Call (Global 'Succ)
                                     (list (Global 'one))))
+                 (DefVal 'irrelevant (Call (Global 'Succ)
+                                           (list (Call (Global 'Zero) '()))))
+                 (DefVal 'irrelevant-fail (Call (Global 'plus)
+                                                (list (Global 'Succ)
+                                                      (Global 'Succ))))
                  (Call (Global 'plus)
                        (list (Global 'two) (Global 'one)))))
 
@@ -178,11 +196,11 @@ Goal: produce an executable implementation for the notebook UI.
         [(? DefFun?) s]
         [(? DefStruct?) s]
         [(DefVal name expr)  (Process name
-                                      (delay/sync
-                                       (run-expr expr (hash) globals)))]
+                                      (delay
+                                        (run-expr expr (hash) globals)))]
         [(? Expr? expr)  (Process #false
-                                  (delay/sync
-                                   (run-expr expr (hash) globals)))])))
+                                  (delay
+                                    (run-expr expr (hash) globals)))])))
   (define globals
     (for/hash ([s program]
                #:when (or (Def? s)
@@ -198,7 +216,7 @@ Goal: produce an executable implementation for the notebook UI.
     ; locals map to a value
     [(Local name) (hash-ref locals name)]
     ; globals can map to:
-    ; - a running DefVal  (a future)
+    ; - a running DefVal  (a Process)
     ; - a static DefStruct
     ; - a static DefFun
     [(Global name) (match (hash-ref globals name)
@@ -223,7 +241,7 @@ Goal: produce an executable implementation for the notebook UI.
     (run-expr e locals globals)))
 (define (apply-cases value cases locals globals)
   (match cases
-    ['() (error 'run-expr "no case for: ~v" value)]
+    ['() (error 'pattern-matching "no case for: ~v" value)]
     [(cons (Case pat rhs) cases)
      (match (try-destructure pat value)
        [#false (apply-cases value cases locals globals)]
@@ -256,6 +274,25 @@ Goal: produce an executable implementation for the notebook UI.
 (module+ test
 
   (define runnable-prog (eval-program prog))
+
+
+  (check-equal? (map render runnable-prog)
+                '[
+                  (struct Zero 0)
+                  (struct Succ 1)
+                  (def (plus x y)
+                    (match x
+                      [(Zero) y]
+                      [(Succ xx) (Succ (plus xx y))]))
+                  (def one #:not-started)
+                  (def two #:not-started)
+                  (def irrelevant #:not-started)
+                  (def irrelevant-fail #:not-started)
+                  #:not-started
+                  ;
+                  ])
+
+  ; force the last part to run
   (check-equal?
    (force (Process-thunk (last runnable-prog)))
    (Call (Global 'Succ)
@@ -266,5 +303,50 @@ Goal: produce an executable implementation for the notebook UI.
                        (list
                         (Call (Global 'Zero) '()))))))))
 
+  (check-equal? (map render runnable-prog)
+                '[
+                  (struct Zero 0)
+                  (struct Succ 1)
+                  (def (plus x y)
+                    (match x
+                      [(Zero) y]
+                      [(Succ xx) (Succ (plus xx y))]))
+                  (def one (Succ (Zero)))
+                  (def two (Succ (Succ (Zero))))
+                  (def irrelevant #:not-started)
+                  (def irrelevant-fail #:not-started)
+                  (Succ (Succ (Succ (Zero))))
+                  ;
+                  ])
+
+  (start-program! runnable-prog)
+  ; Even with a sleep this small, we can't observe a #:running state.
+  ; This will have to wait until programs are longer.
+  (sleep 0.00000000001)
+  (check-equal? (map render runnable-prog)
+                '[
+                  (struct Zero 0)
+                  (struct Succ 1)
+                  (def (plus x y)
+                    (match x
+                      [(Zero) y]
+                      [(Succ xx) (Succ (plus xx y))]))
+                  (def one (Succ (Zero)))
+                  (def two (Succ one))
+                  (def irrelevant (Succ (Zero)))
+                  (def irrelevant-fail "; pattern-matching: no case for: (Global 'Succ)\n")
+                  (Succ (Succ (Succ (Zero))))
+                  ;
+                  ])
+
+
   ;;
   )
+
+(define/contract (start-program! prog) (-> runnable-program? void?)
+  ; start a background thread for each Process in prog
+  (for ([s prog])
+    (match s
+      [(Process _ thunk)  (thread (lambda ()
+                                    (force thunk)))]
+      [_ (void)])))
