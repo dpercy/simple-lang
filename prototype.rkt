@@ -1,5 +1,6 @@
 #lang racket
 (require (only-in racket/exn exn->string))
+(require racket/generator)
 (module+ test (require rackunit))
 
 (module helpers racket/base
@@ -350,3 +351,86 @@ Goal: produce an executable implementation for the notebook UI.
       [(Process _ thunk)  (thread (lambda ()
                                     (force thunk)))]
       [_ (void)])))
+
+(define (program-done? prog)
+  (for/and ([p (in-list prog)]
+            #:when (Process? p))
+    (match p
+      [(Process _ thunk) (promise-forced? thunk)])))
+
+; TODO instead of sleeping, get the thunks to notify when they complete
+(define/contract (in-rendered-evaluation stmts #:sleep [sleep-seconds 0.1]) (-> (listof Stmt?) (sequence/c any/c))
+  (define prog (eval-program stmts))
+  (start-program! prog)
+  (in-generator
+   (let loop ()
+     ; check done before yielding:
+     ; you want to make sure to yield the final value.
+     (if (program-done? prog)
+         (yield (map render prog))
+         (begin
+           (yield (map render prog))
+           (sleep sleep-seconds)
+           (loop))))))
+
+(define (read-all-string str)
+  (with-input-from-string str
+    (lambda ()
+      (sequence->list (in-producer read eof-object?)))))
+
+(define (show-all-string sexprs)
+  (with-output-to-string
+    (lambda ()
+      (for ([s sexprs])
+        (println s (current-output-port) 1)))))
+
+(module+ main
+  (require web-server/servlet
+           web-server/servlet-env
+           web-server/http/redirect
+           )
+  (require net/rfc6455)
+
+  ; start a websocket server:
+  ; - async, returns a close! function
+  (define shutdown-websocket-server!
+    (ws-serve
+     #:port 8001
+     (lambda (conn req)
+       ; There's always one thread computing something.
+       (define replier #false)
+       (for ([msg (in-producer ws-recv eof-object? conn)])
+         (when replier
+           (kill-thread replier)
+           (thread-wait replier))
+         (set! replier (thread (lambda ()
+                                 ; The replier thread replies with a sequence of responses
+                                 ; to the one request.
+                                 (match (with-handlers ([exn:fail?
+                                                         (lambda (exn)
+                                                           (ws-send! conn (~v exn))
+                                                           #false)])
+                                          (define sexpr (read-all-string msg))
+                                          (map parse sexpr))
+                                   [#false (void)]
+                                   [stmts
+                                    (for ([result (in-rendered-evaluation stmts)])
+                                      (ws-send! conn (show-all-string result))
+                                      (sleep 1))]))))))))
+
+  ; start a normal web server
+  ; - blocks until killed
+  (serve/servlet (lambda (request)
+                   (redirect-to "/ui/notebook.html" temporarily))
+                 #:servlet-path "/"
+                 #:launch-browser? #false
+                 #:extra-files-paths (list ".")
+                 )
+
+  (shutdown-websocket-server!)
+
+
+
+
+  ;;
+  )

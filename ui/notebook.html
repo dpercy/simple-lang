@@ -1,6 +1,6 @@
 
 <link rel="stylesheet"
-      href="codemirror.css">
+      href="vendor/codemirror.css">
 <style>
   body {
     margin: 0;
@@ -20,24 +20,22 @@
 
 <textarea id="myTextarea">
 
-data Nat = Zero | Succ Nat
+(struct Zero 0)
+(struct Succ 1)
 
-one :: Nat
-one = Succ Zero
-
-two :: Nat
-two = Succ one
+(def one (Succ (Zero)))
+(def two (Succ one))
 
 one
-Succ one
-Zero
+(Succ one)
+(Zero)
 
+(def (plus x y)
+  (match x
+    [(Zero) y]
+    [(Succ xx) (Succ (plus xx y))]))
 
-plus :: Nat -> Nat -> Nat
-plus Zero n = n
-plus (Succ x) n = Succ (plus x n)
-
-four = plus two two
+(def four (plus two two))
 
 </textarea>
 <pre id="output">
@@ -46,30 +44,29 @@ four = plus two two
 
 
 
-<script src="codemirror.js"></script>
+<script src="vendor/codemirror.js"></script>
 <script>
   var editor = CodeMirror.fromTextArea(myTextarea, {
     lineNumbers: true
   });
 
+  var connection = new WebSocket('ws://localhost:8001');
+  connection.onopen = function(ev) {
+    update();
+  };
+  connection.onmessage = function(ev) {
+    console.log('got ev', ev);
+    document.getElementById('output').innerText = ev.data;
+  };
+
   function update() {
     var contents = editor.getValue();
-    console.log('posting', contents);
-    fetch('/eval', {
-      method: 'POST',
-      body: contents,
-    }).then(response => {
-      response.text().then(text => {
-        console.log('got', text);
-        document.getElementById('output').innerText = text;
-      });
-    });
+    console.log('sending', contents);
+    connection.send(contents);
   }
 
   // TODO debounce
   // TODO show most recent success, even when there's an error
   // TODO color output to show stale/freshness
   editor.on('change', update);
-
-  update();
 </script>
