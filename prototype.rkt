@@ -212,6 +212,7 @@ Goal: produce an executable implementation for the notebook UI.
 
 (define/contract eval-stmt (-> Stmt? (hash/c symbol? Stmt?) runnable-statement?)
   (memoize
+   ; TODO manage the size of this memo table
    #:hash (make-hash)
    (lambda (stmt relevant-defs)
      (match stmt
@@ -364,13 +365,20 @@ Goal: produce an executable implementation for the notebook UI.
   ;;
   )
 
-(define/contract (start-program! prog) (-> runnable-program? void?)
+(define/contract (start-program! prog) (-> runnable-program? (listof thread?))
   ; start a background thread for each Process in prog
-  (for ([s prog])
-    (match s
-      [(Process _ thunk)  (thread (lambda ()
-                                    (force thunk)))]
-      [_ (void)])))
+  (for/list ([s prog]
+             #:when (Process? s))
+    (start-process! s)))
+
+(define/contract start-process! (-> Process? thread?)
+  (memoize
+   ; TODO need ephemerons here?
+   #:hash (make-weak-hasheq)
+   (lambda (s)
+     (match s
+       [(Process _ thunk)  (thread (lambda ()
+                                     (force thunk)))]))))
 
 (define (program-done? prog)
   (for/and ([p (in-list prog)]
