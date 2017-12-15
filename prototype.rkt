@@ -49,6 +49,7 @@ syntax:
 
 (struct Expr Stmt () #:transparent)
 (struct Quote Expr (value) #:transparent)
+(struct Prim Expr (func) #:transparent)
 (struct Local Expr (name) #:transparent)
 (struct Global Expr (name) #:transparent)
 (struct Call Expr (func args) #:transparent)
@@ -59,6 +60,7 @@ syntax:
 (struct Case (pat expr) #:transparent)
 
 (struct Pat () #:transparent)
+(struct PatLitr (value) #:transparent)
 (struct PatHole (name) #:transparent)
 (struct PatCtor (name args) #:transparent)
 
@@ -76,6 +78,23 @@ Goal: produce an executable implementation for the notebook UI.
 
 |#
 
+(define prims
+  (list
+   + - * / < =
+   string-length
+   substring
+   string-append
+   string-split
+   string-join
+   string-upcase
+   string-downcase
+   ))
+
+(define prim-table
+  (for/hash ([p prims])
+    (values (object-name p) p)))
+
+
 (define kw? (or/c 'def 'struct 'match))
 (define name? (and/c symbol? (not/c kw?)))
 (define (parse sexpr) ; -> stmt
@@ -90,6 +109,9 @@ Goal: produce an executable implementation for the notebook UI.
   (match sexpr
     [(? string? s) (Quote s)]
     [(? number? n) (Quote n)]
+    [(? boolean? b) (Quote b)]
+    [(? symbol? p) #:when (hash-has-key? prim-table p)
+     (Prim (hash-ref prim-table p))]
     [(? name? name) (if (set-member? locals name)
                         (Local name)
                         (Global name))]
@@ -110,12 +132,17 @@ Goal: produce an executable implementation for the notebook UI.
                                                    locals))))]))
 (define (parse-pat pat)
   (match pat
+    [(? string? s) (PatLitr s)]
+    [(? number? n) (PatLitr n)]
+    [(? boolean? b) (PatLitr b)]
     [(? name? name) (PatHole name)]
     [(list* (? name? name) args) (PatCtor name (map parse-pat args))]))
 (define (pat-holes pat)
   (match pat
+    [(PatLitr _) (set)]
     [(PatHole name) (set name)]
     [(PatCtor _ args) (foldr set-union (set) (map pat-holes args))]))
+
 
 (define (render term)
   (define r render)
@@ -124,6 +151,7 @@ Goal: produce an executable implementation for the notebook UI.
     [(DefFun name ps b) `(def (,name ,@ps) ,(r b))]
     [(DefStruct name arity) `(struct ,name ,arity)]
     [(Quote v) v]
+    [(Prim p) (object-name p)]
     [(Local name) name]
     [(Global name) name]
     [(Call func args) (cons (r func) (map r args))]
@@ -237,6 +265,7 @@ Goal: produce an executable implementation for the notebook UI.
                                                  (hash/c symbol? Def?)
                                                  any/c)
   (match expr
+    [(Prim _) expr]
     [(Quote _) expr]
     ; locals map to a value
     [(Local name) (hash-ref locals name)]
@@ -251,6 +280,8 @@ Goal: produce an executable implementation for the notebook UI.
                       (match (eval-stmt stmt defs)
                         [(Process _ thunk) (force thunk)])])]
     [(Call func args) (match (run-expr* (cons func args) locals defs)
+                        [(cons (Prim f) args)
+                         (Quote (apply f (map Quote-value args)))]
                         [(cons (Global name) args)
                          (match (hash-ref defs name)
                            [(DefStruct _ arity) #:when (= arity (length args))
@@ -277,6 +308,9 @@ Goal: produce an executable implementation for the notebook UI.
                              defs)])]))
 (define (try-destructure pat value)
   (match pat
+    [(PatLitr v) (if (equal? (Quote v) value)
+                     (hash)
+                     #false)]
     [(PatHole name) (hash name value)]
     [(PatCtor cname argpats)
      (match value
