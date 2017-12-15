@@ -197,12 +197,18 @@ Goal: produce an executable implementation for the notebook UI.
       (match s
         [(? DefFun?) s]
         [(? DefStruct?) s]
+        ; - futures don't support cycle detection; we need promises
+        ; - delay doesn't support threads (bogus "reentrant promise" errors)
+        ; - delay/sync lies and says promise-forced? #true always
+        ; - lazy + delay/sync does the trick???
         [(DefVal name expr)  (Process name
-                                      (delay
-                                        (run-expr expr (hash) globals)))]
+                                      (lazy
+                                       (delay/sync
+                                        (run-expr expr (hash) globals))))]
         [(? Expr? expr)  (Process #false
-                                  (delay
-                                    (run-expr expr (hash) globals)))])))
+                                  (lazy
+                                   (delay/sync
+                                    (run-expr expr (hash) globals))))])))
   (define globals
     (for/hash ([s program]
                #:when (or (Def? s)
@@ -213,6 +219,9 @@ Goal: produce an executable implementation for the notebook UI.
         [(DefFun name _ _)  (values name s)]
         [(Process name _)   (values name s)])))
   program)
+
+
+
 (define (run-expr expr locals globals)
   (match expr
     ; locals map to a value
