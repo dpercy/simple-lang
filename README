@@ -11,9 +11,16 @@ Pure Functional Programming experiment:
     - DONE consistent like a spreadsheet
     - DONE output shows each def/expr as "done", "running", or "crashed"
     
+  - practicality:
+    - convenient syntax for naturals and strings (and lists?)
+    - jets or primops for manipulating them
+    - would be neat if this was semantically just sugar for constructors
+
+  - prove it! by doing advent of code
+
   - robustness:
-    - TODO edits made in one definition should not invalidate other defs.
-      - MEMO APPROACH: break evaluation into several steps, and memoize some of them:
+    - edits made in one definition should not invalidate other defs.
+      - DONE MEMO APPROACH: break evaluation into several steps, and memoize some of them:
         - (program, def) -> (reachable-program, def)  ; remove statements irrelevant to *this def*
 	  - cheap; no need to memoize.
 	- (reachable-program, def) -> process ;
@@ -21,6 +28,7 @@ Pure Functional Programming experiment:
 	  - if the def changed, or a dep changed, the result changes.
 	  - expire policy for memo table??
 	    - really big lru cache for now
+	  - if 
       - DIFF APPROACH: let eval-program look at 2 versions
         - goal is to return the eval of the new version
 	- but can reuse previous results when possible
@@ -38,13 +46,6 @@ Pure Functional Programming experiment:
 	then letting the old state become unreachable.
 	because "A thread that has not terminated can be garbage collected (see Garbage Collection) if it is unreachable and suspended"
 	https://docs.racket-lang.org/reference/threads.html
-
-  - practicality:
-    - convenient syntax for naturals and strings (and lists?)
-    - jets or primops for manipulating them
-    - would be neat if this was semantically just sugar for constructors
-
-  - prove it! by doing advent of code
 
 
 
