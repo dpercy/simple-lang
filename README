@@ -12,9 +12,9 @@ Pure Functional Programming experiment:
     - DONE output shows each def/expr as "done", "running", or "crashed"
     
   - practicality:
-    - convenient syntax for naturals and strings (and lists?)
-    - jets or primops for manipulating them
-    - would be neat if this was semantically just sugar for constructors
+    - DONE convenient syntax for naturals and strings (and lists?)
+    - DONE jets or primops for manipulating them
+    - (maybe later) would be neat if this was semantically just sugar for constructors
 
   - prove it! by doing advent of code
 

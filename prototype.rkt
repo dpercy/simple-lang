@@ -50,6 +50,7 @@ syntax:
 (struct Expr Stmt () #:transparent)
 (struct Quote Expr (value) #:transparent)
 (struct Prim Expr (func) #:transparent)
+(struct Error Expr (msg) #:transparent)
 (struct Local Expr (name) #:transparent)
 (struct Global Expr (name) #:transparent)
 (struct Call Expr (func args) #:transparent)
@@ -80,14 +81,23 @@ Goal: produce an executable implementation for the notebook UI.
 
 (define prims
   (list
-   + - * / < =
+   ; numbers
+   + - * /
+   ; - and booleans
+   < =
+
+   ; strings
    string-length
    substring
    string-append
-   string-split
-   string-join
    string-upcase
    string-downcase
+   ; - and lists
+   string-split
+   string-join
+   ; - and numbers
+   string->number
+   number->string
    ))
 
 (define prim-table
@@ -143,11 +153,12 @@ Goal: produce an executable implementation for the notebook UI.
     [(PatHole name) (set name)]
     [(PatCtor _ args) (foldr set-union (set) (map pat-holes args))]))
 
-
+(define render-abbreviate-defun (make-parameter #false))
 (define (render term)
   (define r render)
   (match term
     [(DefVal name val) `(def ,name ,(r val))]
+    [(DefFun name ps b) #:when (render-abbreviate-defun) `(def (,name ,@ps) ...)]
     [(DefFun name ps b) `(def (,name ,@ps) ,(r b))]
     [(DefStruct name arity) `(struct ,name ,arity)]
     [(Quote v) v]
@@ -157,8 +168,10 @@ Goal: produce an executable implementation for the notebook UI.
     [(Call func args) (cons (r func) (map r args))]
     [(Match scr cases) `(match ,(r scr) ,@(map r cases))]
     [(Case pat expr) `[,(r pat) ,(r expr)]]
+    [(PatLitr v) v]
     [(PatHole name) name]
     [(PatCtor name args) `(,name ,@(map r args))]
+    [(Error msg) `(#:fail ,msg)]
     ; cheating a bit here by rendering a Process
     [(Process (? name? name) thunk) `(def ,name ,(r (Process #false thunk)))]
     [(Process #false thunk)
@@ -224,7 +237,6 @@ Goal: produce an executable implementation for the notebook UI.
 (struct Process (name thunk) #:transparent)
 (define runnable-statement? (or/c DefFun? DefStruct? Process?))
 (define runnable-program? (listof runnable-statement?))
-(define runnable-globals? (hash/c symbol? runnable-statement?))
 (define/contract (eval-program stmts) (-> (listof Stmt?) runnable-program?)
   (define defs (for/hash ([s stmts]
                           #:when (Def? s))
@@ -235,13 +247,13 @@ Goal: produce an executable implementation for the notebook UI.
       (eval-stmt s defs)))
   program)
 
-
 (define (memoize f #:hash h)
   (procedure-rename
    (lambda args
      (hash-ref! h args (lambda () (apply f args))))
    (string->symbol (format "memoized:~s" (object-name f)))))
 
+(define current-eval-stmt (make-parameter #f))
 (define/contract eval-stmt (-> Stmt? (hash/c symbol? Stmt?) runnable-statement?)
   (memoize
    ; TODO manage the size of this memo table
@@ -267,6 +279,7 @@ Goal: produce an executable implementation for the notebook UI.
   (match expr
     [(Prim _) expr]
     [(Quote _) expr]
+    [(Error msg) (error msg)]
     ; locals map to a value
     [(Local name) (hash-ref locals name)]
     ; globals can map to:
@@ -281,17 +294,18 @@ Goal: produce an executable implementation for the notebook UI.
                         [(Process _ thunk) (force thunk)])])]
     [(Call func args) (match (run-expr* (cons func args) locals defs)
                         [(cons (Prim f) args)
-                         (Quote (apply f (map Quote-value args)))]
+                         (value->quote (apply f (map quote->value args)))]
                         [(cons (Global name) args)
                          (match (hash-ref defs name)
                            [(DefStruct _ arity) #:when (= arity (length args))
                             (Call (Global name) args)]
-                           [(DefFun _ params body)
-                            (run-expr body
-                                      (for/fold ([locals locals]) ([p params]
-                                                                   [a args])
-                                        (hash-set locals p a))
-                                      defs)])])]
+                           [(DefFun name params body)
+                            (parameterize ([current-eval-stmt name])
+                              (run-expr body
+                                        (for/fold ([locals locals]) ([p params]
+                                                                     [a args])
+                                          (hash-set locals p a))
+                                        defs))])])]
     [(Match scrutinee cases) (let ([value (run-expr scrutinee locals defs)])
                                (apply-cases value cases locals defs))]))
 (define (run-expr* exprs locals defs)
@@ -299,7 +313,7 @@ Goal: produce an executable implementation for the notebook UI.
     (run-expr e locals defs)))
 (define (apply-cases value cases locals defs)
   (match cases
-    ['() (error 'pattern-matching "no case for: ~v" value)]
+    ['() (error 'pattern-matching "~s: no case for: ~v" (current-eval-stmt) value)]
     [(cons (Case pat rhs) cases)
      (match (try-destructure pat value)
        [#false (apply-cases value cases locals defs)]
@@ -331,6 +345,19 @@ Goal: produce an executable implementation for the notebook UI.
   (for/fold ([h2 h2])
             ([{k v} (in-hash h1)])
     (hash-set h2 k v)))
+
+(define (quote->value q)
+  (match q
+    [(Call (Global 'Cons) (list x y)) (cons (quote->value x)
+                                            (quote->value y))]
+    [(Call (Global 'Empty) '()) '()]
+    [(Quote v) v]))
+(define (value->quote q)
+  (match q
+    [(cons x y) (Call (Global 'Cons) (list (value->quote x)
+                                           (value->quote y)))]
+    ['() (Call (Global 'Empty) '())]
+    [v (Quote v)]))
 
 (module+ test
 
@@ -458,6 +485,14 @@ Goal: produce an executable implementation for the notebook UI.
            )
   (require net/rfc6455)
 
+  (define (safe-parse sexpr)
+    (with-handlers ([exn:fail?
+                     (lambda (exn)
+                       (Error (exn-message exn)))])
+      (parse sexpr)))
+
+  (render-abbreviate-defun #true)
+
   ; start a websocket server:
   ; - async, returns a close! function
   (define shutdown-websocket-server!
@@ -478,7 +513,7 @@ Goal: produce an executable implementation for the notebook UI.
                                                            (ws-send! conn (~v exn))
                                                            #false)])
                                           (define sexpr (read-all-string msg))
-                                          (map parse sexpr))
+                                          (map safe-parse sexpr))
                                    [#false (void)]
                                    [stmts
                                     (for ([result (in-rendered-evaluation stmts)])
