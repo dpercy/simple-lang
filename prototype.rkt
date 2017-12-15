@@ -133,7 +133,8 @@ Goal: produce an executable implementation for the notebook UI.
      (cond
        [(promise-forced? thunk) (match (with-handlers ([exn:fail? (lambda (e) e)])
                                          (force thunk))
-                                  [(? exn:fail? exn) (exn->string exn)]
+                                  [(? exn:fail? exn) `(#:fail
+                                                       ,(exn-message exn))]
                                   [(? Expr? expr) (render expr)])]
        [(promise-running? thunk) '#:running]
        [else '#:not-started])]))
@@ -333,9 +334,9 @@ Goal: produce an executable implementation for the notebook UI.
                       [(Zero) y]
                       [(Succ xx) (Succ (plus xx y))]))
                   (def one (Succ (Zero)))
-                  (def two (Succ one))
+                  (def two (Succ (Succ (Zero))))
                   (def irrelevant (Succ (Zero)))
-                  (def irrelevant-fail "; pattern-matching: no case for: (Global 'Succ)\n")
+                  (def irrelevant-fail (#:fail "pattern-matching: no case for: (Global 'Succ)"))
                   (Succ (Succ (Succ (Zero))))
                   ;
                   ])
