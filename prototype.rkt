@@ -42,10 +42,10 @@ syntax:
 |#
 
 (struct Stmt () #:transparent)
-(struct Def Stmt () #:transparent)
-(struct DefVal Def (name expr) #:transparent)
-(struct DefFun Def (name params body) #:transparent)
-(struct DefStruct Def (name arity) #:transparent)
+(struct Def Stmt (name) #:transparent)
+(struct DefVal Def (expr) #:transparent)
+(struct DefFun Def (params body) #:transparent)
+(struct DefStruct Def (arity) #:transparent)
 
 (struct Expr Stmt () #:transparent)
 (struct Local Expr (name) #:transparent)
@@ -190,39 +190,47 @@ Goal: produce an executable implementation for the notebook UI.
   )
 
 (struct Process (name thunk) #:transparent)
-(define runnable-program? (listof (or/c DefFun? DefStruct? Process?)))
+(define runnable-statement? (or/c DefFun? DefStruct? Process?))
+(define runnable-program? (listof runnable-statement?))
+(define runnable-globals? (hash/c symbol? runnable-statement?))
 (define/contract (eval-program stmts) (-> (listof Stmt?) runnable-program?)
+  (define defs (for/hash ([s stmts]
+                          #:when (Def? s))
+                 (values (Def-name s) s)))
   (define program
     (for/list ([s stmts])
-      (match s
-        [(? DefFun?) s]
-        [(? DefStruct?) s]
-        ; - futures don't support cycle detection; we need promises
-        ; - delay doesn't support threads (bogus "reentrant promise" errors)
-        ; - delay/sync lies and says promise-forced? #true always
-        ; - lazy + delay/sync does the trick???
-        [(DefVal name expr)  (Process name
-                                      (lazy
-                                       (delay/sync
-                                        (run-expr expr (hash) globals))))]
-        [(? Expr? expr)  (Process #false
-                                  (lazy
-                                   (delay/sync
-                                    (run-expr expr (hash) globals))))])))
-  (define globals
-    (for/hash ([s program]
-               #:when (or (Def? s)
-                          (and (Process? s)
-                               (Process-name s))))
-      (match s
-        [(DefStruct name _) (values name s)]
-        [(DefFun name _ _)  (values name s)]
-        [(Process name _)   (values name s)])))
+      ; TODO pass in only the relevant defs
+      (eval-stmt s defs)))
   program)
 
 
+(define (memoize f #:hash h)
+  (procedure-rename
+   (lambda args
+     (hash-ref! h args (lambda () (apply f args))))
+   (string->symbol (format "memoized:~s" (object-name f)))))
 
-(define (run-expr expr locals globals)
+(define/contract eval-stmt (-> Stmt? (hash/c symbol? Stmt?) runnable-statement?)
+  (memoize
+   #:hash (make-hash)
+   (lambda (stmt relevant-defs)
+     (match stmt
+       [(? DefFun?) stmt]
+       [(? DefStruct?) stmt]
+       [(DefVal name expr)  (Process name
+                                     (lazy
+                                      (delay/sync
+                                       (run-expr expr (hash) relevant-defs))))]
+       [(? Expr? expr)  (Process #false
+                                 (lazy
+                                  (delay/sync
+                                   (run-expr expr (hash) relevant-defs))))]))))
+
+
+(define/contract (run-expr expr locals defs) (-> Expr?
+                                                 (hash/c symbol? Expr?)
+                                                 (hash/c symbol? Def?)
+                                                 any/c)
   (match expr
     ; locals map to a value
     [(Local name) (hash-ref locals name)]
@@ -230,13 +238,15 @@ Goal: produce an executable implementation for the notebook UI.
     ; - a running DefVal  (a Process)
     ; - a static DefStruct
     ; - a static DefFun
-    [(Global name) (match (hash-ref globals name)
-                     [(Process _ thunk) (force thunk)]
+    [(Global name) (match (hash-ref defs name)
                      [(DefStruct _ _) expr]
-                     [(DefFun _ _ _) expr])]
-    [(Call func args) (match (run-expr* (cons func args) locals globals)
+                     [(DefFun _ _ _) expr]
+                     [(? DefVal? stmt)
+                      (match (eval-stmt stmt defs)
+                        [(Process _ thunk) (force thunk)])])]
+    [(Call func args) (match (run-expr* (cons func args) locals defs)
                         [(cons (Global name) args)
-                         (match (hash-ref globals name)
+                         (match (hash-ref defs name)
                            [(DefStruct _ arity) #:when (= arity (length args))
                             (Call (Global name) args)]
                            [(DefFun _ params body)
@@ -244,21 +254,21 @@ Goal: produce an executable implementation for the notebook UI.
                                       (for/fold ([locals locals]) ([p params]
                                                                    [a args])
                                         (hash-set locals p a))
-                                      globals)])])]
-    [(Match scrutinee cases) (let ([value (run-expr scrutinee locals globals)])
-                               (apply-cases value cases locals globals))]))
-(define (run-expr* exprs locals globals)
+                                      defs)])])]
+    [(Match scrutinee cases) (let ([value (run-expr scrutinee locals defs)])
+                               (apply-cases value cases locals defs))]))
+(define (run-expr* exprs locals defs)
   (for/list ([e exprs])
-    (run-expr e locals globals)))
-(define (apply-cases value cases locals globals)
+    (run-expr e locals defs)))
+(define (apply-cases value cases locals defs)
   (match cases
     ['() (error 'pattern-matching "no case for: ~v" value)]
     [(cons (Case pat rhs) cases)
      (match (try-destructure pat value)
-       [#false (apply-cases value cases locals globals)]
+       [#false (apply-cases value cases locals defs)]
        [new-locals (run-expr rhs
                              (hash-append new-locals locals)
-                             globals)])]))
+                             defs)])]))
 (define (try-destructure pat value)
   (match pat
     [(PatHole name) (hash name value)]
