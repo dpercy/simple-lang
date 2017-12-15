@@ -48,6 +48,7 @@ syntax:
 (struct DefStruct Def (arity) #:transparent)
 
 (struct Expr Stmt () #:transparent)
+(struct Quote Expr (value) #:transparent)
 (struct Local Expr (name) #:transparent)
 (struct Global Expr (name) #:transparent)
 (struct Call Expr (func args) #:transparent)
@@ -87,6 +88,8 @@ Goal: produce an executable implementation for the notebook UI.
     [_ (parse-expr sexpr (set))]))
 (define (parse-expr sexpr locals)
   (match sexpr
+    [(? string? s) (Quote s)]
+    [(? number? n) (Quote n)]
     [(? name? name) (if (set-member? locals name)
                         (Local name)
                         (Global name))]
@@ -120,6 +123,7 @@ Goal: produce an executable implementation for the notebook UI.
     [(DefVal name val) `(def ,name ,(r val))]
     [(DefFun name ps b) `(def (,name ,@ps) ,(r b))]
     [(DefStruct name arity) `(struct ,name ,arity)]
+    [(Quote v) v]
     [(Local name) name]
     [(Global name) name]
     [(Call func args) (cons (r func) (map r args))]
@@ -233,6 +237,7 @@ Goal: produce an executable implementation for the notebook UI.
                                                  (hash/c symbol? Def?)
                                                  any/c)
   (match expr
+    [(Quote _) expr]
     ; locals map to a value
     [(Local name) (hash-ref locals name)]
     ; globals can map to:
