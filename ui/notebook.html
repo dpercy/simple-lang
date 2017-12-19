@@ -27,29 +27,12 @@
 
 
 <textarea id="myTextarea">
-
-(struct Zero 0)
-(struct Succ 1)
-
-(def one (Succ (Zero)))
-(def two (Succ one))
-
-one
-(Succ one)
-(Zero)
-
-(def (plus x y)
-  (match x
-    [(Zero) y]
-    [(Succ xx) (Succ (plus xx y))]))
-
-(def four (plus two two))
-
 </textarea>
 <pre id="output">
 </pre>
 <aside id="toolbar">
   <button id="save" draggable="true">save</button>
+  <input id="filename" value="example.sl" />
 </aside>
 
 
@@ -60,42 +43,67 @@ one
   var editor = CodeMirror.fromTextArea(myTextarea, {
     lineNumbers: true
   });
+  const filenameInput = document.getElementById('filename');
 
   var connection = new WebSocket('ws://localhost:8001');
   connection.onopen = function(ev) {
+    function update() {
+      var contents = editor.getValue();
+      connection.send(contents);
+    }
+
+    // TODO debounce
+    // TODO show most recent success, even when there's an error
+    // TODO color output to show stale/freshness
+    editor.on('change', update);
     update();
   };
   connection.onmessage = function(ev) {
     document.getElementById('output').innerText = ev.data;
   };
 
-  function update() {
-    var contents = editor.getValue();
-    connection.send(contents);
-  }
-
   // TODO debounce
-  // TODO show most recent success, even when there's an error
-  // TODO color output to show stale/freshness
-  editor.on('change', update);
+  editor.on('change', saveInBrowser);
+  filenameInput.addEventListener('change', saveInBrowser);
+  function saveInBrowser() {
+    const text = editor.getValue();
+    localStorage.lastText = text;
+    sessionStorage.lastText = text;
+
+    const name = filenameInput.value;
+    localStorage.lastName = name;
+    sessionStorage.lastName = name;
+  }
+  function loadInBrowser() {
+
+    // prioritize sessionStorage over localStorage
+    let text, name;
+    if ('lastText' in sessionStorage) {
+      text = sessionStorage.lastText;
+      name = sessionStorage.lastName;
+    } else if ('lastText' in localStorage) {
+      text = localStorage.lastText;
+      name = localStorage.lastName;
+    } else {
+      text = '';
+      name = 'example.sl';
+    }
+
+    editor.setValue(text);
+    filenameInput.value = name;
+  }
+  loadInBrowser();
 
 
   // save
   const save = document.getElementById('save');
   save.addEventListener('dragstart', ev => {
-    console.log('dragstart', ev);
     const text = editor.getValue();
-    //const blob = new Blob([text])
-    //const file = new File([blob], 'newfile.txt');
-    //const url = URL.createObjectURL(blob);
     const url = "data:text/plain;base64," + btoa(text);
-
-    //ev.dataTransfer.dropEffect = 'copy';
-    ev.dataTransfer.setData("DownloadURL", 'text/plain:foo.txt:' + url);
-
-    //ev.dataTransfer.files.push(file);
-    
-    console.log('yay url', url);
+    const mimeType = 'text/plain';
+    const filename = filenameInput.value;
+    const weirdoDownloadURL = mimeType + ':' + filename + ':' + url;
+    ev.dataTransfer.setData("DownloadURL", weirdoDownloadURL);
   });
   document.addEventListener('drop', ev => {
     ev.preventDefault();
