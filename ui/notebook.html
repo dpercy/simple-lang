@@ -97,8 +97,19 @@ one
     
     console.log('yay url', url);
   });
-  save.addEventListener('dragend', ev => {
-    //debugger;
+  document.addEventListener('drop', ev => {
+    ev.preventDefault();
+    
+    if (ev.dataTransfer.files.length > 0) {
+      const file = ev.dataTransfer.files[0];
+
+      const reader = new FileReader();
+      reader.addEventListener('loadend', ev => {
+	const text = ev.srcElement.result;
+	editor.setValue(text);
+      });
+      reader.readAsText(file);
+    }
   });
   
 </script>
