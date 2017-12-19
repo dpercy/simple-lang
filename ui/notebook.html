@@ -14,6 +14,14 @@
     height: 100%;
     margin: 0;
   }
+
+  #toolbar {
+    position: fixed;
+    width: 100%;
+    bottom: 0;
+    z-index: 999;
+    background: lightgray;
+  }
   
 </style>
 
@@ -40,6 +48,9 @@ one
 </textarea>
 <pre id="output">
 </pre>
+<aside id="toolbar">
+  <button id="save" draggable="true">save</button>
+</aside>
 
 
 
@@ -55,13 +66,11 @@ one
     update();
   };
   connection.onmessage = function(ev) {
-    console.log('got ev', ev);
     document.getElementById('output').innerText = ev.data;
   };
 
   function update() {
     var contents = editor.getValue();
-    console.log('sending', contents);
     connection.send(contents);
   }
 
@@ -69,4 +78,27 @@ one
   // TODO show most recent success, even when there's an error
   // TODO color output to show stale/freshness
   editor.on('change', update);
+
+
+  // save
+  const save = document.getElementById('save');
+  save.addEventListener('dragstart', ev => {
+    console.log('dragstart', ev);
+    const text = editor.getValue();
+    //const blob = new Blob([text])
+    //const file = new File([blob], 'newfile.txt');
+    //const url = URL.createObjectURL(blob);
+    const url = "data:text/plain;base64," + btoa(text);
+
+    //ev.dataTransfer.dropEffect = 'copy';
+    ev.dataTransfer.setData("DownloadURL", 'text/plain:foo.txt:' + url);
+
+    //ev.dataTransfer.files.push(file);
+    
+    console.log('yay url', url);
+  });
+  save.addEventListener('dragend', ev => {
+    //debugger;
+  });
+  
 </script>

@@ -16,7 +16,15 @@ Pure Functional Programming experiment:
     - DONE jets or primops for manipulating them
     - (maybe later) would be neat if this was semantically just sugar for constructors
 
+  - saving
+    - I need a way to save the buffer somewhere
+    - also a way to open files later
+    - simple version: drag and drop?
+
   - prove it! by doing advent of code
+    - work slowly
+    - create tickets
+    - save my work
 
   - robustness:
     - edits made in one definition should not invalidate other defs.
