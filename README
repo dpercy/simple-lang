@@ -16,10 +16,16 @@ Pure Functional Programming experiment:
     - DONE jets or primops for manipulating them
     - (maybe later) would be neat if this was semantically just sugar for constructors
 
-  - saving
+  - DONE saving
     - I need a way to save the buffer somewhere
     - also a way to open files later
     - simple version: drag and drop?
+
+  - inline output
+    - each statement's result should go under the appropriate line
+
+  - local definitions
+    - just "let" would be ok
 
   - prove it! by doing advent of code
     - work slowly

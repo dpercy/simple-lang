@@ -11,7 +11,7 @@
   body > .CodeMirror,
   body > #output {
     width: 50%;
-    height: 100%;
+    height: calc(100% - 20px); /* subtract #toolbar height */
     margin: 0;
   }
 
@@ -21,6 +21,7 @@
     bottom: 0;
     z-index: 999;
     background: lightgray;
+    height: 20px;
   }
   
 </style>
@@ -39,8 +40,10 @@
 
 
 <script src="vendor/codemirror.js"></script>
+<script src="vendor/scrollpastend.js"></script>
 <script>
   var editor = CodeMirror.fromTextArea(myTextarea, {
+    scrollPastEnd: true,
     lineNumbers: true
   });
   const filenameInput = document.getElementById('filename');

@@ -351,13 +351,17 @@ Goal: produce an executable implementation for the notebook UI.
     [(Call (Global 'Cons) (list x y)) (cons (quote->value x)
                                             (quote->value y))]
     [(Call (Global 'Empty) '()) '()]
-    [(Quote v) v]))
+    [(Quote v) v]
+    [(Prim f) f]))
 (define (value->quote q)
   (match q
     [(cons x y) (Call (Global 'Cons) (list (value->quote x)
                                            (value->quote y)))]
     ['() (Call (Global 'Empty) '())]
-    [v (Quote v)]))
+    [(? procedure? f) (Prim f)]
+    [(? string? s) (Quote s)]
+    [(? number? n) (Quote n)]
+    [(? boolean? b) (Quote b)]))
 
 (module+ test
 
