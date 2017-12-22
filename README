@@ -21,8 +21,13 @@ Pure Functional Programming experiment:
     - also a way to open files later
     - simple version: drag and drop?
 
+  - better semantics
+    - prototype relies too much on Racket side effects
+
   - inline output
     - each statement's result should go under the appropriate line
+    - can ignore defs
+    - errors should look different from values
 
   - local definitions
     - just "let" would be ok
