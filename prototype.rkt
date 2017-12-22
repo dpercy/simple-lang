@@ -1,69 +1,22 @@
 #lang racket
 (require (only-in racket/exn exn->string))
 (require racket/generator)
+(require (prefix-in racket: racket))
 (module+ test (require rackunit))
-
-(module helpers racket/base
-  (provide (all-defined-out))
-  (require (prefix-in racket: racket))
-
-  (define-syntax match
-    (syntax-rules ()
-      [(_ scrutinee cases ...)
-       (let ([tmp scrutinee])
-         (racket:match tmp
-                       cases ...
-                       [_ (error 'no-case
-                                 "No case for ~v => ~v"
-                                 #'scrutinee
-                                 tmp)]))])))
-(require 'helpers)
-
-#|
-
-syntax:
-
-<stmt> := <expr> | <def>
-
-<def> :=
-| (def <id> <expr>)
-| (def (<id> <id> ...) <expr>)
-| (struct (<id> <id> ...))
-
-<expr> :=
-| <global-ref>
-| <param-ref>
-| (<expr> <expr> ...)
-| (match <expr> [<pat> <expr>] ...)
-
-<pat> :=
-| <id>
-| (<constructor> <pat> ...)
-|#
-
-(struct Stmt () #:transparent)
-(struct Def Stmt (name) #:transparent)
-(struct DefVal Def (expr) #:transparent)
-(struct DefFun Def (params body) #:transparent)
-(struct DefStruct Def (arity) #:transparent)
-
-(struct Expr Stmt () #:transparent)
-(struct Quote Expr (value) #:transparent)
-(struct Prim Expr (func) #:transparent)
-(struct Error Expr (msg) #:transparent)
-(struct Local Expr (name) #:transparent)
-(struct Global Expr (name) #:transparent)
-(struct Call Expr (func args) #:transparent)
+(require "core-syntax.rkt")
 
 
-(struct Match Expr (scrutinee cases) #:transparent)
+(define-syntax match
+  (syntax-rules ()
+    [(_ scrutinee cases ...)
+     (let ([tmp scrutinee])
+       (racket:match tmp
+                     cases ...
+                     [_ (error 'no-case
+                               "No case for ~v => ~v"
+                               #'scrutinee
+                               tmp)]))]))
 
-(struct Case (pat expr) #:transparent)
-
-(struct Pat () #:transparent)
-(struct PatLitr (value) #:transparent)
-(struct PatHole (name) #:transparent)
-(struct PatCtor (name args) #:transparent)
 
 #|
 
