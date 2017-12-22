@@ -426,7 +426,7 @@ Goal: produce an executable implementation for the notebook UI.
                   (def one (Succ (Zero)))
                   (def two (Succ (Succ (Zero))))
                   (def irrelevant (Succ (Zero)))
-                  (def irrelevant-fail (#:fail "pattern-matching: no case for: (Global 'Succ)"))
+                  (def irrelevant-fail (#:fail "pattern-matching: plus: no case for: (Global 'Succ)"))
                   (Succ (Succ (Succ (Zero))))
                   ;
                   ])
