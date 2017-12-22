@@ -1,9 +1,9 @@
 #lang racket
-(require (only-in racket/exn exn->string))
 (require racket/generator)
 (require (prefix-in racket: racket))
 (module+ test (require rackunit))
 (require "core-syntax.rkt")
+(require "surface-syntax.rkt")
 
 
 (define-syntax match
@@ -32,110 +32,8 @@ Goal: produce an executable implementation for the notebook UI.
 
 |#
 
-(define prims
-  (list
-   ; numbers
-   + - * /
-   ; - and booleans
-   < =
-
-   ; strings
-   string-length
-   substring
-   string-append
-   string-upcase
-   string-downcase
-   ; - and lists
-   string-split
-   string-join
-   ; - and numbers
-   string->number
-   number->string
-   ))
-
-(define prim-table
-  (for/hash ([p prims])
-    (values (object-name p) p)))
 
 
-(define kw? (or/c 'def 'struct 'match))
-(define name? (and/c symbol? (not/c kw?)))
-(define (parse sexpr) ; -> stmt
-  (match sexpr
-    [`(def ,(? name? name) ,v) (DefVal name (parse-expr v (set)))]
-    [`(def (,(? name? name) ,(? name? params) ...) ,body)
-     (DefFun name params (parse-expr body (list->set params)))]
-    [`(struct ,(? name? name) ,(? number? arity))
-     (DefStruct name arity)]
-    [_ (parse-expr sexpr (set))]))
-(define (parse-expr sexpr locals)
-  (match sexpr
-    [(? string? s) (Quote s)]
-    [(? number? n) (Quote n)]
-    [(? boolean? b) (Quote b)]
-    [(? symbol? p) #:when (hash-has-key? prim-table p)
-     (Prim (hash-ref prim-table p))]
-    [(? name? name) (if (set-member? locals name)
-                        (Local name)
-                        (Global name))]
-    [(cons (? (not/c kw?) func) args)
-     (Call (parse-expr func locals)
-           (for/list ([a args])
-             (parse-expr a locals)))]
-    [`(match ,scrutinee ,cases ...)
-     (Match (parse-expr scrutinee locals)
-            (for/list ([c cases])
-              (parse-case c locals)))]))
-(define (parse-case case locals)
-  (match case
-    [(list lhs rhs) (let ([pat (parse-pat lhs)])
-                      (Case pat
-                            (parse-expr rhs
-                                        (set-union (pat-holes pat)
-                                                   locals))))]))
-(define (parse-pat pat)
-  (match pat
-    [(? string? s) (PatLitr s)]
-    [(? number? n) (PatLitr n)]
-    [(? boolean? b) (PatLitr b)]
-    [(? name? name) (PatHole name)]
-    [(list* (? name? name) args) (PatCtor name (map parse-pat args))]))
-(define (pat-holes pat)
-  (match pat
-    [(PatLitr _) (set)]
-    [(PatHole name) (set name)]
-    [(PatCtor _ args) (foldr set-union (set) (map pat-holes args))]))
-
-(define render-abbreviate-defun (make-parameter #false))
-(define (render term)
-  (define r render)
-  (match term
-    [(DefVal name val) `(def ,name ,(r val))]
-    [(DefFun name ps b) #:when (render-abbreviate-defun) `(def (,name ,@ps) ...)]
-    [(DefFun name ps b) `(def (,name ,@ps) ,(r b))]
-    [(DefStruct name arity) `(struct ,name ,arity)]
-    [(Quote v) v]
-    [(Prim p) (object-name p)]
-    [(Local name) name]
-    [(Global name) name]
-    [(Call func args) (cons (r func) (map r args))]
-    [(Match scr cases) `(match ,(r scr) ,@(map r cases))]
-    [(Case pat expr) `[,(r pat) ,(r expr)]]
-    [(PatLitr v) v]
-    [(PatHole name) name]
-    [(PatCtor name args) `(,name ,@(map r args))]
-    [(Error msg) `(#:fail ,msg)]
-    ; cheating a bit here by rendering a Process
-    [(Process (? name? name) thunk) `(def ,name ,(r (Process #false thunk)))]
-    [(Process #false thunk)
-     (cond
-       [(promise-forced? thunk) (match (with-handlers ([exn:fail? (lambda (e) e)])
-                                         (force thunk))
-                                  [(? exn:fail? exn) `(#:fail
-                                                       ,(exn-message exn))]
-                                  [(? Expr? expr) (render expr)])]
-       [(promise-running? thunk) '#:running]
-       [else '#:not-started])]))
 
 (module+ test
 
@@ -230,7 +128,6 @@ Goal: produce an executable implementation for the notebook UI.
                                                  (hash/c symbol? Def?)
                                                  any/c)
   (match expr
-    [(Prim _) expr]
     [(Quote _) expr]
     [(Error msg) (error msg)]
     ; locals map to a value
@@ -246,8 +143,6 @@ Goal: produce an executable implementation for the notebook UI.
                       (match (eval-stmt stmt defs)
                         [(Process _ thunk) (force thunk)])])]
     [(Call func args) (match (run-expr* (cons func args) locals defs)
-                        [(cons (Prim f) args)
-                         (value->quote (apply f (map quote->value args)))]
                         [(cons (Global name) args)
                          (match (hash-ref defs name)
                            [(DefStruct _ arity) #:when (= arity (length args))
@@ -304,24 +199,36 @@ Goal: produce an executable implementation for the notebook UI.
     [(Call (Global 'Cons) (list x y)) (cons (quote->value x)
                                             (quote->value y))]
     [(Call (Global 'Empty) '()) '()]
-    [(Quote v) v]
-    [(Prim f) f]))
+    [(Quote v) v]))
 (define (value->quote q)
   (match q
     [(cons x y) (Call (Global 'Cons) (list (value->quote x)
                                            (value->quote y)))]
     ['() (Call (Global 'Empty) '())]
-    [(? procedure? f) (Prim f)]
     [(? string? s) (Quote s)]
     [(? number? n) (Quote n)]
     [(? boolean? b) (Quote b)]))
+
+(define (render-running term)
+  (match term
+    [(Process (? name? name) thunk) `(def ,name ,(render-running (Process #false thunk)))]
+    [(Process #false thunk)
+     (cond
+       [(promise-forced? thunk) (match (with-handlers ([exn:fail? (lambda (e) e)])
+                                         (force thunk))
+                                  [(? exn:fail? exn) `(#:fail
+                                                       ,(exn-message exn))]
+                                  [(? Expr? expr) (render expr)])]
+       [(promise-running? thunk) '#:running]
+       [else '#:not-started])]
+    [_ (render term)]))
 
 (module+ test
 
   (define runnable-prog (eval-program prog))
 
 
-  (check-equal? (map render runnable-prog)
+  (check-equal? (map render-running runnable-prog)
                 '[
                   (struct Zero 0)
                   (struct Succ 1)
@@ -348,7 +255,7 @@ Goal: produce an executable implementation for the notebook UI.
                        (list
                         (Call (Global 'Zero) '()))))))))
 
-  (check-equal? (map render runnable-prog)
+  (check-equal? (map render-running runnable-prog)
                 '[
                   (struct Zero 0)
                   (struct Succ 1)
@@ -368,7 +275,7 @@ Goal: produce an executable implementation for the notebook UI.
   ; Even with a sleep this small, we can't observe a #:running state.
   ; This will have to wait until programs are longer.
   (sleep 0.00000000001)
-  (check-equal? (map render runnable-prog)
+  (check-equal? (map render-running runnable-prog)
                 '[
                   (struct Zero 0)
                   (struct Succ 1)
@@ -418,9 +325,9 @@ Goal: produce an executable implementation for the notebook UI.
      ; check done before yielding:
      ; you want to make sure to yield the final value.
      (if (program-done? prog)
-         (yield (map render prog))
+         (yield (map render-running prog))
          (begin
-           (yield (map render prog))
+           (yield (map render-running prog))
            (sleep sleep-seconds)
            (loop))))))
 
