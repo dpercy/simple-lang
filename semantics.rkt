@@ -26,6 +26,7 @@
 
 #|
 
+
 Goal:
 - explain the meaning of each program phrase
 - avoid relying on Racket's side effects, because they make it
@@ -34,6 +35,8 @@ Goal:
 - be simple
 .  - easy to understand
 .  - easy to port to another host language
+- keep semantics separate from execution
+.  - semantics shouldn't know about threads!
 
 
 Let's say the meaning of a phrase is a Racket lambda (a "runnable").
@@ -47,19 +50,8 @@ But there are many more side effects it canNOT do:
 - no gensym
 - no mutation
 - no filesystem
-- no way to measure the current time
-
-
-But what's the meaning of a whole Program?
-A program can have parts that diverge and parts that halt.
-You want to be able to "sample" the program while it's running,
-to see which parts have halted...
-
-Or, you could make expressions require "fuel" to run.
-This is like a compromise between direct and step-by-step execution.
-You do a whole "chunk" at a time.
-
-But this doesn't matter until I have recursion.
+- no clock measurement
+- no spawning threads
 
 
 |#
