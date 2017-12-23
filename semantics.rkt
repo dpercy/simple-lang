@@ -3,6 +3,14 @@
 (require "core-syntax.rkt")
 (module+ test (require rackunit))
 
+; When generating code at run-time, we want to use the simplest
+; versions of lambda and #%app, to avoid doing a dynamic-require
+; of the fancy, keyword-supporting lambda and #%app.
+(require (for-template
+          (only-in racket
+                   [#%plain-app #%app]
+                   [#%plain-lambda lambda])))
+
 (define-syntax match
   (syntax-rules ()
     [(_ scrutinee cases ...)
@@ -20,17 +28,39 @@
 
 Goal:
 - explain the meaning of each program phrase
-- avoid relying on Racket's side effects
+- avoid relying on Racket's side effects, because they make it
+.  - hard to understand
+.  - hard to port (to JS, say)
 - be simple
+.  - easy to understand
+.  - easy to port to another host language
 
 
 Let's say the meaning of a phrase is a Racket lambda (a "runnable").
-That way, the meaning is a value.
-When run, this lambda will either
-- terminate
-- crash
-- ... yield somehow?
-- ... request a global somehow?
+The runnable itself is a pure value.
+
+*Running* the runnable produces some limited side effects:
+- it can crash
+- it can diverge
+
+But there are many more side effects it canNOT do:
+- no gensym
+- no mutation
+- no filesystem
+- no way to measure the current time
+
+
+But what's the meaning of a whole Program?
+A program can have parts that diverge and parts that halt.
+You want to be able to "sample" the program while it's running,
+to see which parts have halted...
+
+Or, you could make expressions require "fuel" to run.
+This is like a compromise between direct and step-by-step execution.
+You do a whole "chunk" at a time.
+
+But this doesn't matter until I have recursion.
+
 
 |#
 
@@ -49,12 +79,30 @@ When run, this lambda will either
         (match (combine-denots (cons func args))
           [(Denot fv (cons func args))
            (Denot fv
-                  (apply/fv fv func args))])])]))
+                  (apply/fv fv func args))])])]
+    [(Match test
+            (list (Case (PatLitr #true) consq)
+                  (Case (PatLitr #false) alt)))
+     ; first ensure all 3 subexprs have the same free vars
+     (match (combine-denots (list (eval test)
+                                  (eval consq)
+                                  (eval alt)))
+       [(Denot fv (list test consq alt))
+        ; then wire them together under a binder
+        (Denot fv (if/fv fv test consq alt))])]
+    [(? Match?) (error 'TODO "for now only (match _ [#t _] [#f _]) works")]))
 
 (define/contract (run denot) (-> Denot? any/c)
   (match denot
     [(Denot '() comp) (comp)]
     [(Denot fv _) (error 'run "this expr is not closed: ~v" fv)]))
+
+(define/contract (run/args denot args) (-> Denot? (hash/c symbol? any/c) any/c)
+  (match denot
+    [(Denot fvs comp)
+     (apply comp
+            (for/list ([fv fvs])
+              (hash-ref args fv)))]))
 
 (define (combine-denots denots)
   (match denots
@@ -70,7 +118,7 @@ When run, this lambda will either
               (value-rearranger new-fv old-fv))]))
 (define/contract (value-rearranger input-shape output-shape)
   (-> (listof symbol?) (listof symbol?) procedure?)
-  (racket:eval #`(#%plain-lambda #,input-shape (#%plain-app values #,@output-shape))))
+  (racket:eval #`(lambda #,input-shape (values #,@output-shape))))
 (module+ test
 
 
@@ -106,10 +154,9 @@ When run, this lambda will either
 (define (apply/fv fv func args)
   (racket:eval (with-syntax ([func func]
                              [(args ...) args])
-                 #`(#%plain-lambda (#,@fv)
-                                   (#%plain-app
-                                    (#%plain-app func #,@fv)
-                                    (#%plain-app args #,@fv) ...)))))
+                 #`(lambda (#,@fv)
+                     ((func #,@fv)
+                      (args #,@fv) ...)))))
 (module+ test
   (check-equal? ((apply/fv '(a b c)
                            ; (- b 7) with fv=[a b c]
@@ -121,6 +168,12 @@ When run, this lambda will either
                 ; result should be (- 10 7)
                 3))
 
+(define (if/fv fv test consq alt)
+  (racket:eval #`(lambda (#,@fv)
+                   (if (#,test #,@fv)
+                       (#,consq #,@fv)
+                       (#,alt #,@fv)))))
+
 (module+ test
 
   (check-equal? (run (eval (Quote 17)))
@@ -130,5 +183,33 @@ When run, this lambda will either
   (check-equal? (run (eval (Call (Quote -) (list (Quote 10) (Quote 7)))))
                 3)
 
+  (check-equal? (run (eval (Match (Quote #false)
+                                  (list (Case (PatLitr #true) (Quote 5))
+                                        (Case (PatLitr #false) (Quote 7))))))
+                7)
 
+  (check-equal? (run/args (eval (Local 'x))
+                          (hash 'x 123))
+                123)
+
+  (check-equal? (run/args (eval (Local 'x))
+                          (hash 'x 123))
+                123)
+
+  (check-equal? (run/args (eval (Match (Local 'test)
+                                       (list (Case (PatLitr #true) (Local 'consq))
+                                             (Case (PatLitr #false) (Local 'alt)))))
+                          (hash 'test #true
+                                'consq 1
+                                'alt 2))
+                1)
+  (check-equal? (run/args (eval (Match (Local 'test)
+                                       (list (Case (PatLitr #true) (Local 'consq))
+                                             (Case (PatLitr #false) (Local 'alt)))))
+                          (hash 'test #false
+                                'consq 1
+                                'alt 2))
+                2)
+
+  ;;
   )
