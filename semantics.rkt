@@ -89,6 +89,15 @@ But there are many more side effects it canNOT do:
     [(Denot '() comp) (comp)]
     [(Denot fv _) (error 'run "this expr is not closed: ~v" fv)]))
 
+(define/contract (close/1 denot name val) (-> Denot? symbol? any/c Denot?)
+  (define old-fv (Denot-fv denot))
+  (unless (member name old-fv)
+    (error 'close/1 "~v not free in ~v" name old-fv))
+  (define new-fv (remove name old-fv))
+  (define comp (permute-params denot (cons name new-fv)))
+  (Denot new-fv
+         (lambda args (apply comp val args))))
+
 (define/contract (run/args denot args) (-> Denot? (hash/c symbol? any/c) any/c)
   (match denot
     [(Denot fvs comp)
@@ -202,6 +211,20 @@ But there are many more side effects it canNOT do:
                                 'consq 1
                                 'alt 2))
                 2)
+
+
+  (check-equal? (run/args (Denot '(x y z) (lambda (x y z) (list x y z)))
+                          (hash 'x 1 'y 2 'z 3))
+                '(1 2 3))
+  (check-equal? (run/args (close/1 (Denot '(x y z) (lambda (x y z) (list x y z)))
+                                   'x 1)
+                          (hash 'y 2 'z 3))
+                '(1 2 3))
+  (check-equal? (run/args (close/1 (close/1 (Denot '(x y z) (lambda (x y z) (list x y z)))
+                                            'y 2)
+                                   'z 3)
+                          (hash 'x 1))
+                '(1 2 3))
 
   ;;
   )
