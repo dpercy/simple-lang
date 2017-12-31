@@ -56,6 +56,10 @@ But there are many more side effects it canNOT do:
 
 |#
 
+; The meaning of an expression is a Racket computation.
+; The computation (comp) is represented as a procedure that accepts free variables,
+; and then executes (either to a halt, to a crash, or forever).
+; A DenotExpr struct tracks the names of the free variables alongside the procedure.
 (struct DenotExpr (fv comp) #:transparent)
 
 (define/contract (eval expr) (-> Expr? DenotExpr?)
@@ -225,6 +229,57 @@ But there are many more side effects it canNOT do:
                                    'z 3)
                           (hash 'x 1))
                 '(1 2 3))
+
+  ;;
+  )
+
+
+#|
+
+What do you get when you eval a whole program?
+- some defstruct declarations
+.   - these don't "run", they just "are"
+- some deffun declarations
+.   - these can depend on defvals
+
+|#
+(struct Block () #:transparent)
+(struct BlockDecls Block (decls) #:transparent) ; lists defstructs
+(struct BlockFix Block (...) #:transparent) ; functions
+(struct BlockVal Block (name val) #:transparent) ; single, maybe-named expr
+
+(define (block-deps block)
+  (match block
+    ; defstruct never depends on another statement
+    [(BlockDecls _) '()]
+    ; a toplevel expression block depends on its free variables
+    [(BlockVal _ v) (DenotExpr-fv v)]
+    ; a letrec block depends on its functions' free variables,
+    ; minus the functions themselves.
+    [(BlockFix funcs) (let ([fvs (foldr set-union (set)
+                                        (map DenotExpr-fv (hash-values funcs)))])
+                        (set-subtract fvs (list->set (hash))))]))
+(module+ test
+
+  ; example program
+  (list (DefVal 'a (Quote 5))
+        (DefFun 'f '(n) (Call (Global 'g) (list (Global 'a))))
+        (DefFun 'g '(n) (Call (Global 'f) (list (Global 'n))))
+        (DefVal 'x (Call (Global 'f) (list (Quote 0))))
+        (Global 'x))
+  ; example denotation
+  (list (BlockVal 'a (DenotExpr '() (lambda ()
+                                      5)))
+        (BlockFix (hash 'f (DenotExpr '(a g) (lambda (a g)
+                                               (lambda (n)
+                                                 (g a))))
+                        'g (DenotExpr '(a f) (lambda (a f)
+                                               (lambda (n)
+                                                 (f a))))))
+        (BlockVal 'x (DenotExpr '(f) (lambda (f)
+                                       (f 0))))
+        (BlockVal #f (DenotExpr '(x) (lambda (x)
+                                       x))))
 
   ;;
   )
