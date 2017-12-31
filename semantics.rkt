@@ -56,65 +56,65 @@ But there are many more side effects it canNOT do:
 
 |#
 
-(struct Denot (fv comp) #:transparent)
+(struct DenotExpr (fv comp) #:transparent)
 
-(define/contract (eval expr) (-> Expr? Denot?)
+(define/contract (eval expr) (-> Expr? DenotExpr?)
   (match expr
-    [(Quote v) (Denot '() (lambda () v))]
-    [(Error msg) (Denot '() (lambda () (error msg)))]
-    [(Local name) (Denot (list name)
-                         (lambda (x) x))]
+    [(Quote v) (DenotExpr '() (lambda () v))]
+    [(Error msg) (DenotExpr '() (lambda () (error msg)))]
+    [(Local name) (DenotExpr (list name)
+                             (lambda (x) x))]
     [(Global name) (error 'TODO "globals")]
     [(Call func args)
      (match (map eval (cons func args))
        [(cons func args)
-        (match (combine-denots (cons func args))
-          [(Denot fv (cons func args))
-           (Denot fv
-                  (apply/fv fv func args))])])]
+        (match-let-values ([{fv (cons func args)} (combine-denots (cons func args))])
+          (DenotExpr fv
+                     (apply/fv fv func args)))])]
     [(Match test
             (list (Case (PatLitr #true) consq)
                   (Case (PatLitr #false) alt)))
      ; first ensure all 3 subexprs have the same free vars
-     (match (combine-denots (list (eval test)
-                                  (eval consq)
-                                  (eval alt)))
-       [(Denot fv (list test consq alt))
-        ; then wire them together under a binder
-        (Denot fv (if/fv fv test consq alt))])]
+     (match-let-values ([{fv (list test consq alt)}
+                         (combine-denots (list (eval test)
+                                               (eval consq)
+                                               (eval alt)))])
+       ; then wire them together under a binder
+       (DenotExpr fv (if/fv fv test consq alt)))]
     [(? Match?) (error 'TODO "for now only (match _ [#t _] [#f _]) works")]))
 
-(define/contract (run denot) (-> Denot? any/c)
+(define/contract (run denot) (-> DenotExpr? any/c)
   (match denot
-    [(Denot '() comp) (comp)]
-    [(Denot fv _) (error 'run "this expr is not closed: ~v" fv)]))
+    [(DenotExpr '() comp) (comp)]
+    [(DenotExpr fv _) (error 'run "this expr is not closed: ~v" fv)]))
 
-(define/contract (close/1 denot name val) (-> Denot? symbol? any/c Denot?)
-  (define old-fv (Denot-fv denot))
+(define/contract (close/1 denot name val) (-> DenotExpr? symbol? any/c DenotExpr?)
+  (define old-fv (DenotExpr-fv denot))
   (unless (member name old-fv)
     (error 'close/1 "~v not free in ~v" name old-fv))
   (define new-fv (remove name old-fv))
   (define comp (permute-params denot (cons name new-fv)))
-  (Denot new-fv
-         (lambda args (apply comp val args))))
+  (DenotExpr new-fv
+             (lambda args (apply comp val args))))
 
-(define/contract (run/args denot args) (-> Denot? (hash/c symbol? any/c) any/c)
+(define/contract (run/args denot args) (-> DenotExpr? (hash/c symbol? any/c) any/c)
   (match denot
-    [(Denot fvs comp)
+    [(DenotExpr fvs comp)
      (apply comp
             (for/list ([fv fvs])
               (hash-ref args fv)))]))
 
-(define (combine-denots denots)
+(define/contract (combine-denots denots) (-> (listof DenotExpr?)
+                                             (values (listof symbol?) (listof procedure?)))
   (match denots
-    [(list (Denot fv-lists _) ...)
+    [(list (DenotExpr fv-lists _) ...)
      (let* ([all-fv (remove-duplicates (apply append fv-lists))]
             [funcs (for/list ([denot denots])
                      (permute-params denot all-fv))])
-       (Denot all-fv funcs))]))
+       (values all-fv funcs))]))
 (define (permute-params ed new-fv)
   (match ed
-    [(Denot old-fv func)
+    [(DenotExpr old-fv func)
      (compose func
               (value-rearranger new-fv old-fv))]))
 (define/contract (value-rearranger input-shape output-shape)
@@ -131,21 +131,21 @@ But there are many more side effects it canNOT do:
                 'c)
 
   ; permute-params lets you add and reorder parameters to a function
-  (check-equal? ((permute-params (Denot '(a x b)
-                                        (lambda (a x b) x))
+  (check-equal? ((permute-params (DenotExpr '(a x b)
+                                            (lambda (a x b) x))
                                  '(x y a b))
                  'one 'two 'red 'blue)
                 'one)
-  (check-equal? ((permute-params (Denot '(a x b)
-                                        (lambda (a x b) x))
+  (check-equal? ((permute-params (DenotExpr '(a x b)
+                                            (lambda (a x b) x))
                                  '(q x a b))
                  'one 'two 'red 'blue)
                 'two)
 
   ; you can't remove parameters
   (check-exn exn:fail?
-             (permute-params (Denot '(x)
-                                    (lambda (x) x))
+             (permute-params (DenotExpr '(x)
+                                        (lambda (x) x))
                              '(q x)))
 
 
@@ -213,14 +213,14 @@ But there are many more side effects it canNOT do:
                 2)
 
 
-  (check-equal? (run/args (Denot '(x y z) (lambda (x y z) (list x y z)))
+  (check-equal? (run/args (DenotExpr '(x y z) (lambda (x y z) (list x y z)))
                           (hash 'x 1 'y 2 'z 3))
                 '(1 2 3))
-  (check-equal? (run/args (close/1 (Denot '(x y z) (lambda (x y z) (list x y z)))
+  (check-equal? (run/args (close/1 (DenotExpr '(x y z) (lambda (x y z) (list x y z)))
                                    'x 1)
                           (hash 'y 2 'z 3))
                 '(1 2 3))
-  (check-equal? (run/args (close/1 (close/1 (Denot '(x y z) (lambda (x y z) (list x y z)))
+  (check-equal? (run/args (close/1 (close/1 (DenotExpr '(x y z) (lambda (x y z) (list x y z)))
                                             'y 2)
                                    'z 3)
                           (hash 'x 1))
