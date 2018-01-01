@@ -100,13 +100,14 @@ But there are many more side effects it canNOT do:
   (define comp (permute-params denot (cons name new-fv)))
   (DenotExpr new-fv
              (lambda args (apply comp val args))))
+(define/contract (close denot args) (-> DenotExpr? (hash/c symbol? any/c) DenotExpr?)
+  (for/fold ([denot denot]) ([{name val} (in-hash args)])
+    (if (member name (DenotExpr-fv denot))
+        (close/1 denot name val)
+        denot)))
 
 (define/contract (run/args denot args) (-> DenotExpr? (hash/c symbol? any/c) any/c)
-  (match denot
-    [(DenotExpr fvs comp)
-     (apply comp
-            (for/list ([fv fvs])
-              (hash-ref args fv)))]))
+  (run (close denot args)))
 
 (define/contract (combine-denots denots) (-> (listof DenotExpr?)
                                              (values (listof symbol?) (listof procedure?)))
@@ -371,4 +372,84 @@ defstruct and deffun always succeed
                      (BlockVal #f (DenotExpr '(x) _))))
 
   ;;
+  )
+
+
+(define/contract (run-program/sequential blocks) (-> (listof Block?) (listof any/c))
+  (define globals (hash))
+  (for ([b blocks])
+    (run-block/args b globals)
+    ))
+
+(struct Result (name val) #:transparent)
+(define/contract (run-block/args block args) (-> Block? (hash/c symbol? any/c) (listof Result?))
+  (match block
+    [(BlockDecl (DefStruct name arity)) (error 'TODO "make a new constructor")]
+    [(BlockVal name val) (list (Result name (run/args val args)))]
+    [(BlockFix funcs)
+     (define closed-fixed-funcs (run/fix (for/hash ([{name val} funcs])
+                                           (values name (close val args)))))
+     (for/hash ([{name val} closed-fixed-funcs])
+       (values name (run val)))]))
+
+#|
+
+"fix" is a fixpoint combinator for records of functions:
+
+|   y f = f (y f)
+|   (run/fix funcs) ===
+|       (for/hash ([{name func} funcs])
+|         (values name
+|                 (run/args func (run/fix funcs))))
+
+It feeds the closed version of the thing into the open version of the thing.
+That way the open version can call the closed version directly.
+
+|#
+(define (Y f)
+  ; spec:
+  '(f (Y f))
+  ; eta expand:
+  '(f (lambda args (apply (Y f) args)))
+  ; use sharing to call Y only once:
+  (letrec ([result (f (lambda args (apply result args)))])
+    result))
+(define (run/fix funcs)
+  ; specification of the result:
+  '(for/hash ([{name func} funcs])
+     (values name
+             (run/args func (run/fix funcs))))
+  ; eta expand:
+  (for/hash ([{name func} funcs])
+    (values name
+            (lambda args
+              (apply (run/args func (run/fix funcs))
+                     args))))
+  ; use sharing to call fix only once:
+  (letrec ([result
+            (for/hash ([{name func} funcs])
+              (values name
+                      (lambda args
+                        (apply (run/args func result)
+                               args))))])
+    result))
+(module+ test
+
+  (define (fact-open fact)
+    (lambda (n)
+      (if (= n 0)
+          1
+          (* n (fact (- n 1))))))
+
+  (check-equal? (map (Y fact-open) '(0 1 2 3 4))
+                '(1 1 2 6 24))
+
+  (define fact-record (hash 'fact (DenotExpr '(fact) fact-open)))
+  (define fact-record-fixed (run/fix fact-record))
+  (define fact (hash-ref fact-record-fixed 'fact))
+  (check-equal? (map fact '(0 1 2 3 4))
+                '(1 1 2 6 24))
+
+
+  ''TODO-even-odd-example
   )
