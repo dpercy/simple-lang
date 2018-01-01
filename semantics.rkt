@@ -10,6 +10,7 @@
           (only-in racket
                    [#%plain-app #%app]
                    [#%plain-lambda lambda])))
+(require (only-in "graph.rkt" find-sccs))
 
 (define-syntax match
   (syntax-rules ()
@@ -66,9 +67,8 @@ But there are many more side effects it canNOT do:
   (match expr
     [(Quote v) (DenotExpr '() (lambda () v))]
     [(Error msg) (DenotExpr '() (lambda () (error msg)))]
-    [(Local name) (DenotExpr (list name)
-                             (lambda (x) x))]
-    [(Global name) (error 'TODO "globals")]
+    [(or (Global name) (Local name)) (DenotExpr (list name)
+                                                (lambda (x) x))]
     [(Call func args)
      (match (map eval (cons func args))
        [(cons func args)
@@ -237,49 +237,138 @@ But there are many more side effects it canNOT do:
 #|
 
 What do you get when you eval a whole program?
-- some defstruct declarations
-.   - these don't "run", they just "are"
-- some deffun declarations
-.   - these can depend on defvals
+A sequence of "blocks".
+A "block" can be:
+- some struct declarations
+- some function declarations
+- a defval to run
+- an anonymous expr to run (just like a defval)
+
+Except where one block explicitly depends on another,
+they can be run independently.
+defstruct and deffun always succeed
 
 |#
 (struct Block () #:transparent)
-(struct BlockDecls Block (decls) #:transparent) ; lists defstructs
-(struct BlockFix Block (...) #:transparent) ; functions
+(struct BlockDecl Block (decl) #:transparent) ; a single defstruct
+(struct BlockFix Block (funcs) #:transparent) ; functions
 (struct BlockVal Block (name val) #:transparent) ; single, maybe-named expr
 
-(define (block-deps block)
+(define/contract (block-deps block) (-> Block? (listof symbol?))
   (match block
     ; defstruct never depends on another statement
-    [(BlockDecls _) '()]
+    [(BlockDecl _) '()]
     ; a toplevel expression block depends on its free variables
     [(BlockVal _ v) (DenotExpr-fv v)]
     ; a letrec block depends on its functions' free variables,
     ; minus the functions themselves.
-    [(BlockFix funcs) (let ([fvs (foldr set-union (set)
+    [(BlockFix funcs) (let ([fvs (foldr set-union '()
                                         (map DenotExpr-fv (hash-values funcs)))])
-                        (set-subtract fvs (list->set (hash))))]))
+                        (set-subtract fvs (hash-keys funcs)))]))
+(define (block-names block)
+  (match block
+    [(BlockDecl (DefStruct name _)) (list name)]
+    [(BlockFix funcs) (hash-keys funcs)]
+    [(BlockVal #f _) '()]
+    [(BlockVal name _) (list name)]))
+
+
+
+(define/contract (eval-program stmts) (-> (listof Stmt?) (listof Block?))
+  ; Calling eval-statement on each statement gives you one block per statement.
+  ; But eval-program must produce an acyclic list of blocks.
+  ; So we also need to find strongly-connected components and merge them.
+  (define per-stmt-blocks (map eval-statement stmts))
+
+  (define blocks-by-name (for/hash ([b per-stmt-blocks]
+                                    #:when (cons? (block-names b)))
+                           (values (only (block-names b))
+                                   b)))
+  ; We reverse the SCCs because find-sccs sorts with the arrows going forward,
+  ; but when sorting by dependencies we want the most pointed-to items
+  ; earlier in the list.
+  (define sccs (reverse
+                (find-sccs (for/hash ([{name b} (in-hash blocks-by-name)])
+                             (values name (block-deps b))))))
+  (define named-blocks (for/list ([scc sccs])
+                         (define blocks (for/list ([name scc])
+                                          (hash-ref blocks-by-name name)))
+                         (foldr1 merge-blocks blocks)))
+  (define anonymous-expr-blocks (for/list ([b per-stmt-blocks]
+                                           #:when (and (BlockVal? b)
+                                                       (false? (BlockVal-name b))))
+                                  b))
+  (append named-blocks
+          anonymous-expr-blocks))
+(define (only lst)
+  (match lst
+    [(list x) x]))
+
+(define/contract (merge-blocks b1 b2) (-> Block? Block? Block?)
+  (when (BlockVal? b1)
+    (error 'eval-program "defval ~s depends on itself" (BlockVal-name b1)))
+  (when (BlockVal? b2)
+    (error 'eval-program "defval ~s depends on itself" (BlockVal-name b2)))
+  (merge-fixes b1 b2))
+(define/contract (merge-fixes b1 b2) (-> BlockFix? BlockFix? BlockFix?)
+  (match-define (BlockFix funcs1) b1)
+  (match-define (BlockFix funcs2) b2)
+  (BlockFix (for/fold ([h funcs1]) ([{k v} funcs2])
+              (hash-set h k v))))
+
+(define (foldr1 f lst)
+  (match lst
+    [(list x) x]
+    [(cons x xs) (f x (foldr1 f xs))]))
+(module+ test
+  (check-equal? (foldr1 append '((a b c) () (x) (y)))
+                '(a b c x y))
+  (check-equal? (foldr1 list '(a b c x y z))
+                '(a (b (c (x (y z)))))))
+
+
+(define/contract (eval-statement stmt) (-> Stmt? Block?)
+  (match stmt
+    [(? Expr?) (BlockVal #f (eval stmt))]
+    [(DefVal name expr) (BlockVal name (eval expr))]
+    [(DefFun name params body) (BlockFix (hash name (make-function params (eval body))))]
+    [(? DefStruct?) (BlockDecl stmt)]))
+(define (make-function params denot-func)
+  ; denot-func is the denotation of a function body
+  ; (so its free variables are a combination of globals and parameters).
+  ; make-function returns the denotation of the whole function.
+  (match-define (DenotExpr old-fvs comp) denot-func)
+  (define new-fvs (for/list ([fv old-fvs]
+                             #:when (not (member fv params)))
+                    fv))
+  (DenotExpr new-fvs
+             (racket:eval #`(lambda #,new-fvs
+                              (lambda #,params
+                                ((quote #,comp) #,@old-fvs))))))
+(module+ test
+  (check-equal? ((run/args (make-function '(y)
+                                          (DenotExpr '(x y z)
+                                                     (lambda (x y z) (list x y z))))
+                           (hash 'x 'xx 'z 'zz))
+                 'yy)
+                '(xx yy zz)))
+
+
 (module+ test
 
   ; example program
-  (list (DefVal 'a (Quote 5))
-        (DefFun 'f '(n) (Call (Global 'g) (list (Global 'a))))
-        (DefFun 'g '(n) (Call (Global 'f) (list (Global 'n))))
-        (DefVal 'x (Call (Global 'f) (list (Quote 0))))
-        (Global 'x))
-  ; example denotation
-  (list (BlockVal 'a (DenotExpr '() (lambda ()
-                                      5)))
-        (BlockFix (hash 'f (DenotExpr '(a g) (lambda (a g)
-                                               (lambda (n)
-                                                 (g a))))
-                        'g (DenotExpr '(a f) (lambda (a f)
-                                               (lambda (n)
-                                                 (f a))))))
-        (BlockVal 'x (DenotExpr '(f) (lambda (f)
-                                       (f 0))))
-        (BlockVal #f (DenotExpr '(x) (lambda (x)
-                                       x))))
+  (define prog1
+    (list (DefVal 'a (Quote 5))
+          (DefFun 'f '(n) (Call (Global 'g) (list (Global 'a))))
+          (DefFun 'g '(n) (Call (Global 'f) (list (Global 'n))))
+          (DefVal 'x (Call (Global 'f) (list (Quote 0))))
+          (Global 'x)))
+  (check-match (eval-program prog1)
+               (list (BlockVal 'a (DenotExpr '() _))
+                     (BlockFix (hash-table ['f (DenotExpr '(g a) _)]
+                                           ['g (DenotExpr '(f) _)]))
+                     (BlockVal 'x (DenotExpr '(f) _))
+                     (BlockVal #f (DenotExpr '(x) _))))
 
   ;;
   )
