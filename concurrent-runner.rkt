@@ -87,20 +87,27 @@ but the results might come out in any order.
 
 (module+ main
   (require "surface-syntax.rkt")
+  (displayln "hello")
 
+  (define (slowly seconds value)
+    (sleep seconds)
+    value)
   (define prims (list
                  +
                  -
                  <
                  =
+                 slowly
                  ;;
                  ))
   (define globals (for/hash ([prim prims])
                     (values (object-name prim) prim)))
 
+  (displayln "compiling...")
   (define program-sexprs (sequence->list (in-producer read eof-object?)))
   (define program-stmts (map parse program-sexprs))
   (define program-blocks (eval-program program-stmts))
+  (displayln "running...")
   (for ([result (run-program/concurrent program-blocks globals)])
     (match-define (Result name val) result)
     (displayln (format "~s = ~v" name val)))
