@@ -451,5 +451,33 @@ That way the open version can call the closed version directly.
                 '(1 1 2 6 24))
 
 
-  ''TODO-even-odd-example
-  )
+  (define even/odd-record (hash 'even (DenotExpr '(odd)
+                                                 (lambda (odd)
+                                                   (lambda (n)
+                                                     (if (= n 0)
+                                                         #true
+                                                         (odd (- n 1))))))
+                                'odd (DenotExpr '(even)
+                                                (lambda (even)
+                                                  (lambda (n)
+                                                    (if (= n 0)
+                                                        #false
+                                                        (even (- n 1))))))))
+  (define even/odd-record-fixed (run/fix even/odd-record))
+  (define even (hash-ref even/odd-record-fixed 'even))
+  (define odd  (hash-ref even/odd-record-fixed 'odd))
+  (check-equal? (map even '(0 1 2 3 4))
+                '(#t #f #t #f #t))
+  (check-equal? (map odd '(0 1 2 3 4))
+                '(#f #t #f #t #f))
+
+  #|
+
+  next steps:
+  - create a new file for a parallel runner
+  - create another file for a websocket server,
+  and make the front-end work with it.
+  .   - ui should put values below expressions on a line widget
+  .       - requires line numbers for each anonymous expr
+
+  |#)
