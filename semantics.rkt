@@ -420,7 +420,8 @@ defstruct and deffun always succeed
      (define results (run-block/args b globals))
      (for ([r results])
        (match-define (Result name val) r)
-       (set! globals (hash-set globals name val))
+       (when name
+         (set! globals (hash-set globals name val)))
        (yield r)))))
 
 #|
@@ -540,19 +541,24 @@ That way the open version can call the closed version directly.
                               (DefVal 'seven-even (Call (Global 'even) (list (Quote 7))))
                               (Call (Global '-)
                                     (list (Quote 50)
-                                          (Quote 8)))))
+                                          (Quote 8)))
+                              (Call (Global '+)
+                                    (list (Quote 2) (Quote 3)))
+                              ))
 
   (define even/odd-denot (eval-program even/odd-prog))
   (define even/odd-results (run-program/sequential even/odd-denot
                                                    (hash '- -
-                                                         '= =)))
+                                                         '= =
+                                                         '+ +)))
   (check-match (sequence->list even/odd-results)
                (list-no-order (Result 'zero 0)
                               (Result 'even _)
                               (Result 'odd _)
                               (Result 'seven-odd #true)
                               (Result 'seven-even #false)
-                              (Result #f 42)))
+                              (Result #f 42)
+                              (Result #f 5)))
 
   ;;
   )
