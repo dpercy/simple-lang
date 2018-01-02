@@ -1,5 +1,17 @@
 #lang racket
+
+; high-level interface
+(provide eval-program
+         run-program/sequential
+         (struct-out Result))
+; low-level interface
+(provide Block?
+         block-deps
+         block-names
+         run-block/args)
+
 (require (prefix-in racket: racket))
+(require racket/generator)
 (require "core-syntax.rkt")
 (module+ test (require rackunit))
 
@@ -63,6 +75,9 @@ But there are many more side effects it canNOT do:
 ; A DenotExpr struct tracks the names of the free variables alongside the procedure.
 (struct DenotExpr (fv comp) #:transparent)
 
+(define (closed? v) (empty? (DenotExpr-fv v)))
+(define closed-DenotExpr? (and/c DenotExpr? closed?))
+
 (define/contract (eval expr) (-> Expr? DenotExpr?)
   (match expr
     [(Quote v) (DenotExpr '() (lambda () v))]
@@ -87,7 +102,7 @@ But there are many more side effects it canNOT do:
        (DenotExpr fv (if/fv fv test consq alt)))]
     [(? Match?) (error 'TODO "for now only (match _ [#t _] [#f _]) works")]))
 
-(define/contract (run denot) (-> DenotExpr? any/c)
+(define/contract (run denot) (-> closed-DenotExpr? any/c)
   (match denot
     [(DenotExpr '() comp) (comp)]
     [(DenotExpr fv _) (error 'run "this expr is not closed: ~v" fv)]))
@@ -100,11 +115,17 @@ But there are many more side effects it canNOT do:
   (define comp (permute-params denot (cons name new-fv)))
   (DenotExpr new-fv
              (lambda args (apply comp val args))))
-(define/contract (close denot args) (-> DenotExpr? (hash/c symbol? any/c) DenotExpr?)
+(define/contract (close* denot args) (-> DenotExpr? (hash/c symbol? any/c) DenotExpr?)
   (for/fold ([denot denot]) ([{name val} (in-hash args)])
     (if (member name (DenotExpr-fv denot))
         (close/1 denot name val)
         denot)))
+(define/contract (close denot args) (->i ([denot DenotExpr?]
+                                          [args (hash/c symbol? any/c)])
+                                         #:pre (denot args) (for/and ([key (DenotExpr-fv denot)])
+                                                              (hash-has-key? args key))
+                                         [result closed-DenotExpr?])
+  (close* denot args))
 
 (define/contract (run/args denot args) (-> DenotExpr? (hash/c symbol? any/c) any/c)
   (run (close denot args)))
@@ -288,9 +309,15 @@ defstruct and deffun always succeed
   ; We reverse the SCCs because find-sccs sorts with the arrows going forward,
   ; but when sorting by dependencies we want the most pointed-to items
   ; earlier in the list.
-  (define sccs (reverse
-                (find-sccs (for/hash ([{name b} (in-hash blocks-by-name)])
-                             (values name (block-deps b))))))
+  (define dep-graph (for/hash ([{name b} (in-hash blocks-by-name)])
+                      (values name
+                              ; Ignore dependencies on things not defined here.
+                              ; These are imports, which will be provided to
+                              ; run-program/sequential.
+                              (for/list ([name (block-deps b)]
+                                         #:when (hash-has-key? blocks-by-name name))
+                                name))))
+  (define sccs (reverse (find-sccs dep-graph)))
   (define named-blocks (for/list ([scc sccs])
                          (define blocks (for/list ([name scc])
                                           (hash-ref blocks-by-name name)))
@@ -375,22 +402,26 @@ defstruct and deffun always succeed
   )
 
 
-(define/contract (run-program/sequential blocks) (-> (listof Block?) (listof any/c))
-  (define globals (hash))
-  (for ([b blocks])
-    (run-block/args b globals)
-    ))
-
 (struct Result (name val) #:transparent)
 (define/contract (run-block/args block args) (-> Block? (hash/c symbol? any/c) (listof Result?))
   (match block
     [(BlockDecl (DefStruct name arity)) (error 'TODO "make a new constructor")]
     [(BlockVal name val) (list (Result name (run/args val args)))]
     [(BlockFix funcs)
-     (define closed-fixed-funcs (run/fix (for/hash ([{name val} funcs])
-                                           (values name (close val args)))))
-     (for/hash ([{name val} closed-fixed-funcs])
-       (values name (run val)))]))
+     (define closed-funcs (for/hash ([{name val} funcs])
+                            (values name (close* val args))))
+     (define closed-fixed-funcs (run/fix closed-funcs))
+     (for/list ([{name val} closed-fixed-funcs])
+       (Result name val))]))
+
+(define/contract (run-program/sequential blocks globals) (-> (listof Block?) (hash/c symbol? any/c) (sequence/c Result?))
+  (in-generator
+   (for ([b blocks])
+     (define results (run-block/args b globals))
+     (for ([r results])
+       (match-define (Result name val) r)
+       (set! globals (hash-set globals name val))
+       (yield r)))))
 
 #|
 
@@ -414,7 +445,7 @@ That way the open version can call the closed version directly.
   ; use sharing to call Y only once:
   (letrec ([result (f (lambda args (apply result args)))])
     result))
-(define (run/fix funcs)
+(define/contract (run/fix funcs) (-> (hash/c symbol? DenotExpr?) (hash/c symbol? procedure?))
   ; specification of the result:
   '(for/hash ([{name func} funcs])
      (values name
@@ -474,10 +505,54 @@ That way the open version can call the closed version directly.
   #|
 
   next steps:
-  - create a new file for a parallel runner
+  - create a new file for a concurrent (not parallel!) runner
   - create another file for a websocket server,
   and make the front-end work with it.
   .   - ui should put values below expressions on a line widget
   .       - requires line numbers for each anonymous expr
 
   |#)
+
+
+(module+ test
+
+  (define even/odd-prog (list (DefFun 'even '(n)
+                                (Match (Call (Global '=) (list (Local 'n) (Global 'zero)))
+                                       (list
+                                        (Case (PatLitr #true) (Quote #true))
+                                        (Case (PatLitr #false) (Call (Global 'odd)
+                                                                     (list
+                                                                      (Call (Global '-)
+                                                                            (list (Local 'n)
+                                                                                  (Quote 1)))))))))
+                              (DefVal 'zero (Quote 0))
+                              (DefFun 'odd '(n)
+                                (Match (Call (Global '=) (list (Local 'n) (Global 'zero)))
+                                       (list
+                                        (Case (PatLitr #true) (Quote #false))
+                                        (Case (PatLitr #false) (Call (Global 'even)
+                                                                     (list
+                                                                      (Call (Global '-)
+                                                                            (list (Local 'n)
+                                                                                  (Quote 1)))))))))
+
+                              (DefVal 'seven-odd  (Call (Global 'odd)  (list (Quote 7))))
+                              (DefVal 'seven-even (Call (Global 'even) (list (Quote 7))))
+                              (Call (Global '-)
+                                    (list (Quote 50)
+                                          (Quote 8)))))
+
+  (define even/odd-denot (eval-program even/odd-prog))
+  (define even/odd-results (run-program/sequential even/odd-denot
+                                                   (hash '- -
+                                                         '= =)))
+  (check-match (sequence->list even/odd-results)
+               (list-no-order (Result 'zero 0)
+                              (Result 'even _)
+                              (Result 'odd _)
+                              (Result 'seven-odd #true)
+                              (Result 'seven-even #false)
+                              (Result #f 42)))
+
+  ;;
+  )
