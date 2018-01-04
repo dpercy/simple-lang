@@ -1,5 +1,7 @@
 #lang racket
 
+(provide run-program/concurrent)
+
 (require racket/async-channel)
 
 (require "core-syntax.rkt")
@@ -12,6 +14,10 @@ where each result is yielded as it is computed.
 
 run-program/concurrent must also yield each result as it is computed,
 but the results might come out in any order.
+
+TODO handle missing globals not by hanging
+
+TODO handle errors as a Result
 
 |#
 (define/contract (run-program/concurrent blocks globals) (-> (listof Block?) (hash/c symbol? any/c) (sequence/c Result?))
