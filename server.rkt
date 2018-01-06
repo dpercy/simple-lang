@@ -41,18 +41,24 @@
 
      |#
 
-     (define t (thread (lambda () (void))))
+     (define shutdown-previous-computation! (lambda () (void)))
+
      (for ([msg (in-producer ws-recv eof-object? conn)])
-       (kill-thread t)
-       (thread-wait t)
-       (set! t (thread
-                (lambda ()
-                  ; TODO update the client to accumulate results properly
-                  (define results '())
-                  (ws-send! conn (format-results results))
-                  (for ([r (run! msg)])
-                    (set! results (cons r results))
-                    (ws-send! conn (format-results results))))))))))
+       (shutdown-previous-computation!)
+
+       (define cust (make-custodian))
+       (define t (parameterize ([current-custodian cust])
+                   (thread
+                    (lambda ()
+                      (define results '())
+                      (ws-send! conn (format-results results))
+                      (for ([r (run! msg)])
+                        (set! results (cons r results))
+                        (ws-send! conn (format-results results)))))))
+       (set! shutdown-previous-computation!
+             (lambda ()
+               (custodian-shutdown-all cust)
+               (thread-wait t)))))))
 
 (define (format-results results)
   (jsexpr->string
