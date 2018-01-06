@@ -8,9 +8,8 @@
     display: flex;
     flex-direction: row;
   }
-  body > .CodeMirror,
-  body > #output {
-    width: 50%;
+  body > .CodeMirror {
+    width: 100%;
     height: calc(100% - 20px); /* subtract #toolbar height */
     margin: 0;
   }
@@ -32,14 +31,16 @@
     color: #0000cc;
     display: inline-block;
   }
+
+  #save:hover:after {
+    content: " - drag this button to a Finder window";
+  }
   
 </style>
 
 
 <textarea id="myTextarea">
 </textarea>
-<pre id="output">
-</pre>
 <aside id="toolbar">
   <button id="save" draggable="true">save</button>
   <input id="filename" value="example.sl" />
@@ -66,7 +67,6 @@
 
     // TODO debounce
     // TODO show most recent success, even when there's an error
-    // TODO color output to show stale/freshness
     editor.on('change', update);
     update();
   };
@@ -82,7 +82,6 @@
       const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result.text));
       lineWidgets.push(lw);
     }
-    document.getElementById('output').innerText = JSON.stringify(json, null, 4);
   };
   var lineWidgets = [];
 
