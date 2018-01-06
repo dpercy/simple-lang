@@ -23,6 +23,15 @@
     background: lightgray;
     height: 20px;
   }
+
+  .result {
+    border: 1px solid #adbbff;
+    border-radius: 3px;
+    padding: 0.25em;
+    background-color: #d6f5ff;
+    color: #0000cc;
+    display: inline-block;
+  }
   
 </style>
 
@@ -80,7 +89,7 @@
   function createResultWidget(text) {
     const elem = document.createElement('div');
     elem.innerText = text;
-    elem.class = 'result';
+    elem.classList = 'result';
     return elem;
   }
 
