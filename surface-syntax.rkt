@@ -7,19 +7,33 @@
 (define kw? (or/c 'def 'struct 'match))
 (define name? (and/c symbol? (not/c kw?)))
 (define (parse-program sexprs) ; -> listof stmt
-  (for/list ([sexpr sexprs])
+  (for/list ([sexpr (in-syntax sexprs)])
+    (define endline (last-line sexpr))
     (with-handlers ([exn:fail?
                      (lambda (exn)
-                       (ToplevelExpr (Error (exn-message exn))))])
-      (parse-stmt sexpr))))
-(define (parse-stmt sexpr) ; -> stmt
+                       (ToplevelExpr (last-line sexpr)
+                                     (Error (exn-message exn))))])
+      (parse-stmt/endline (syntax->datum sexpr) endline))))
+(define (parse-stmt/endline sexpr endline) ; -> stmt
   (match sexpr
-    [`(def ,(? name? name) ,v) (DefVal name (parse-expr v (set)))]
+    [`(def ,(? name? name) ,v) (DefVal endline name (parse-expr v (set)))]
     [`(def (,(? name? name) ,(? name? params) ...) ,body)
-     (DefFun name params (parse-expr body (list->set params)))]
+     (DefFun endline name params (parse-expr body (list->set params)))]
     [`(struct ,(? name? name) ,(? number? arity))
-     (DefStruct name arity)]
-    [_ (ToplevelExpr (parse-expr sexpr (set)))]))
+     (DefStruct endline name arity)]
+    [_ (ToplevelExpr endline (parse-expr sexpr (set)))]))
+
+(define (last-line sexpr)
+  (define (max2 x y) (if (and x y)
+                         (max x y)
+                         (or x y)))
+  (match sexpr
+    [(? syntax?) (max2 (syntax-line sexpr)
+                       (last-line (syntax-e sexpr)))]
+    [(cons x y) (max2 (last-line x)
+                      (last-line y))]
+    [_ #false]))
+
 (define (parse-expr sexpr locals)
   (match sexpr
     [(? string? s) (Quote s)]
@@ -60,10 +74,11 @@
 (define (render term)
   (define r render)
   (match term
-    [(DefVal name val) `(def ,name ,(r val))]
-    [(DefFun name ps b) #:when (render-abbreviate-defun) `(def (,name ,@ps) ...)]
-    [(DefFun name ps b) `(def (,name ,@ps) ,(r b))]
-    [(DefStruct name arity) `(struct ,name ,arity)]
+    [(DefVal _ name val) `(def ,name ,(r val))]
+    [(DefFun _ name ps b) #:when (render-abbreviate-defun) `(def (,name ,@ps) ...)]
+    [(DefFun _ name ps b) `(def (,name ,@ps) ,(r b))]
+    [(DefStruct _ name arity) `(struct ,name ,arity)]
+    [(ToplevelExpr _ expr) (render expr)]
     [(Quote v) v]
     [(Local name) name]
     [(Global name) name]

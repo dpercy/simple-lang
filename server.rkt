@@ -48,7 +48,6 @@
                 (lambda ()
                   ; TODO update the client to accumulate results properly
                   (define output "")
-
                   (with-handlers ([exn:fail? (lambda (exn)
                                                (ws-send! conn (string-append
                                                                output
@@ -57,11 +56,19 @@
 
 
 
-                    (for ([result (run! msg)])
-                      (set! output (string-append output
-                                                  "\n"
-                                                  (~v result)))
-                      (ws-send! conn output))))))))))
+                    ''(for ([result (run! msg)])
+                        (set! output (string-append output
+                                                    "\n"
+                                                    (~v result)))
+                        (ws-send! conn output))
+
+                    (ws-send! conn
+                              (apply string-append
+                                     (add-between (map ~v (parse-program (read-all-string msg)))
+                                                  "\n")))
+
+                    ;;
+                    ))))))))
 
 (define/contract (run! program-string) (-> string? (sequence/c Result?))
   (define program-sexprs (read-all-string program-string))
@@ -83,7 +90,8 @@
 (define (read-all-string str)
   (with-input-from-string str
     (lambda ()
-      (sequence->list (in-producer read eof-object?)))))
+      (port-count-lines! (current-input-port))
+      (sequence->list (in-producer read-syntax eof-object?)))))
 (module+ test
   (check-equal? (read-all-string "() 1 a")
                 '(() 1 a)))

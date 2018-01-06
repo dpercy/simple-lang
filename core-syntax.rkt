@@ -24,7 +24,7 @@ syntax:
 | (<constructor> <pat> ...)
 |#
 
-(struct Stmt () #:transparent)
+(struct Stmt (endline) #:transparent)
 (struct Def Stmt (name) #:transparent)
 (struct DefVal Def (expr) #:transparent)
 (struct DefFun Def (params body) #:transparent)

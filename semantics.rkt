@@ -289,7 +289,7 @@ defstruct and deffun always succeed
                         (set-subtract fvs (hash-keys funcs)))]))
 (define (block-names block)
   (match block
-    [(BlockDecl (DefStruct name _)) (list name)]
+    [(BlockDecl (? DefStruct? ds)) (list (Def-name ds))]
     [(BlockFix funcs) (hash-keys funcs)]
     [(BlockVal #f _) '()]
     [(BlockVal name _) (list name)]))
@@ -357,9 +357,9 @@ defstruct and deffun always succeed
 
 (define/contract (eval-statement stmt) (-> Stmt? Block?)
   (match stmt
-    [(ToplevelExpr expr) (BlockVal #f (eval expr))]
-    [(DefVal name expr) (BlockVal name (eval expr))]
-    [(DefFun name params body) (BlockFix (hash name (make-function params (eval body))))]
+    [(ToplevelExpr _ expr) (BlockVal #f (eval expr))]
+    [(DefVal _ name expr) (BlockVal name (eval expr))]
+    [(DefFun _ name params body) (BlockFix (hash name (make-function params (eval body))))]
     [(? DefStruct?) (BlockDecl stmt)]))
 (define (make-function params denot-func)
   ; denot-func is the denotation of a function body
@@ -405,7 +405,7 @@ defstruct and deffun always succeed
 (struct Result (name val) #:transparent)
 (define/contract (run-block/args block args) (-> Block? (hash/c symbol? any/c) (listof Result?))
   (match block
-    [(BlockDecl (DefStruct name arity)) (error 'TODO "make a new constructor")]
+    [(BlockDecl (? DefStruct?)) (error 'TODO "make a new constructor")]
     [(BlockVal name val) (list (Result name (run/args val args)))]
     [(BlockFix funcs)
      (define closed-funcs (for/hash ([{name val} funcs])
