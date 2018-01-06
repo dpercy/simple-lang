@@ -1,19 +1,25 @@
 #lang racket
 (require "core-syntax.rkt")
 
-(provide kw? name? parse render render-abbreviate-defun)
+(provide kw? name? parse-program render render-abbreviate-defun)
 
 
 (define kw? (or/c 'def 'struct 'match))
 (define name? (and/c symbol? (not/c kw?)))
-(define (parse sexpr) ; -> stmt
+(define (parse-program sexprs) ; -> listof stmt
+  (for/list ([sexpr sexprs])
+    (with-handlers ([exn:fail?
+                     (lambda (exn)
+                       (ToplevelExpr (Error (exn-message exn))))])
+      (parse-stmt sexpr))))
+(define (parse-stmt sexpr) ; -> stmt
   (match sexpr
     [`(def ,(? name? name) ,v) (DefVal name (parse-expr v (set)))]
     [`(def (,(? name? name) ,(? name? params) ...) ,body)
      (DefFun name params (parse-expr body (list->set params)))]
     [`(struct ,(? name? name) ,(? number? arity))
      (DefStruct name arity)]
-    [_ (parse-expr sexpr (set))]))
+    [_ (ToplevelExpr (parse-expr sexpr (set)))]))
 (define (parse-expr sexpr locals)
   (match sexpr
     [(? string? s) (Quote s)]

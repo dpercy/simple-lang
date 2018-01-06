@@ -29,8 +29,10 @@ syntax:
 (struct DefVal Def (expr) #:transparent)
 (struct DefFun Def (params body) #:transparent)
 (struct DefStruct Def (arity) #:transparent)
+(struct ToplevelExpr Stmt (expr) #:transparent)
 
-(struct Expr Stmt () #:transparent)
+
+(struct Expr () #:transparent)
 (struct Quote Expr (value) #:transparent)
 (struct Error Expr (msg) #:transparent)
 (struct Local Expr (name) #:transparent)

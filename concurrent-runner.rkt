@@ -111,7 +111,7 @@ TODO handle errors as a Result
 
   (displayln "compiling...")
   (define program-sexprs (sequence->list (in-producer read eof-object?)))
-  (define program-stmts (map parse program-sexprs))
+  (define program-stmts (parse-program program-sexprs))
   (define program-blocks (eval-program program-stmts))
   (displayln "running...")
   (for ([result (run-program/concurrent program-blocks globals)])

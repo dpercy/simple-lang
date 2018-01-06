@@ -65,7 +65,7 @@
 
 (define/contract (run! program-string) (-> string? (sequence/c Result?))
   (define program-sexprs (read-all-string program-string))
-  (define program-stmts (map safe-parse program-sexprs))
+  (define program-stmts (parse-program program-sexprs))
   (define program-blocks (eval-program program-stmts))
   (run-program/concurrent program-blocks globals))
 
@@ -87,9 +87,3 @@
 (module+ test
   (check-equal? (read-all-string "() 1 a")
                 '(() 1 a)))
-
-(define (safe-parse sexpr)
-  (with-handlers ([exn:fail?
-                   (lambda (exn)
-                     (Error (exn-message exn)))])
-    (parse sexpr)))

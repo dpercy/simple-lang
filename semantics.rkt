@@ -357,7 +357,7 @@ defstruct and deffun always succeed
 
 (define/contract (eval-statement stmt) (-> Stmt? Block?)
   (match stmt
-    [(? Expr?) (BlockVal #f (eval stmt))]
+    [(ToplevelExpr expr) (BlockVal #f (eval expr))]
     [(DefVal name expr) (BlockVal name (eval expr))]
     [(DefFun name params body) (BlockFix (hash name (make-function params (eval body))))]
     [(? DefStruct?) (BlockDecl stmt)]))
@@ -390,7 +390,7 @@ defstruct and deffun always succeed
           (DefFun 'f '(n) (Call (Global 'g) (list (Global 'a))))
           (DefFun 'g '(n) (Call (Global 'f) (list (Global 'n))))
           (DefVal 'x (Call (Global 'f) (list (Quote 0))))
-          (Global 'x)))
+          (ToplevelExpr (Global 'x))))
   (check-match (eval-program prog1)
                (list (BlockVal 'a (DenotExpr '() _))
                      (BlockFix (hash-table ['f (DenotExpr '(g a) _)]
@@ -539,12 +539,13 @@ That way the open version can call the closed version directly.
 
                               (DefVal 'seven-odd  (Call (Global 'odd)  (list (Quote 7))))
                               (DefVal 'seven-even (Call (Global 'even) (list (Quote 7))))
-                              (Call (Global '-)
-                                    (list (Quote 50)
-                                          (Quote 8)))
-                              (Call (Global '+)
-                                    (list (Quote 2) (Quote 3)))
-                              ))
+                              (ToplevelExpr
+                               (Call (Global '-)
+                                     (list (Quote 50)
+                                           (Quote 8))))
+                              (ToplevelExpr
+                               (Call (Global '+)
+                                     (list (Quote 2) (Quote 3))))))
 
   (define even/odd-denot (eval-program even/odd-prog))
   (define even/odd-results (run-program/sequential even/odd-denot
