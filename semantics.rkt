@@ -386,14 +386,28 @@ defstruct and deffun always succeed
                  'yy)
                 '(xx yy zz)))
 
+(define (make-constructor name arity)
+  (define args (for/list ([i (in-range arity)])
+                 (string->symbol (format "x~v" i))))
+  (define proc
+    (racket:eval #`(lambda #,args
+                     (make-prefab-struct (quote #,name) #,@args))))
+  (procedure-rename proc name))
+(module+ test
+  (check-equal? (object-name (make-constructor 'foo 3)) 'foo)
+  (check-equal? (procedure-arity (make-constructor 'foo 3)) 3)
+  (check-equal? (let ([foo (make-constructor 'foo 3)])
+                  (foo 'a 'b 'c))
+                (make-prefab-struct 'foo 'a 'b 'c)))
+
 
 (module+ test
 
   ; example program
   (define prog1
     (list (DefVal 42 'a (Quote 5))
-          (DefFun 'f '(n) (Call (Global 'g) (list (Global 'a))))
-          (DefFun 'g '(n) (Call (Global 'f) (list (Global 'n))))
+          (DefFun #f 'f '(n) (Call (Global 'g) (list (Global 'a))))
+          (DefFun #f 'g '(n) (Call (Global 'f) (list (Global 'n))))
           (DefVal 64 'x (Call (Global 'f) (list (Quote 0))))
           (ToplevelExpr 99 (Global 'x))))
   (check-match (eval-program prog1)
@@ -412,7 +426,8 @@ defstruct and deffun always succeed
 (struct ResultError Result (msg) #:transparent)
 (define/contract (run-block/args block args) (-> Block? (hash/c symbol? any/c) (listof Result?))
   (match block
-    [(BlockDecl (? DefStruct?)) (error 'TODO "make a new constructor")]
+    [(BlockDecl (DefStruct el name arity))
+     (list (ResultValue el name (make-constructor name arity)))]
     [(BlockVal el name val)
 
      (with-handlers ([values (lambda (exn)
@@ -531,7 +546,7 @@ That way the open version can call the closed version directly.
 
 (module+ test
 
-  (define even/odd-prog (list (DefFun 'even '(n)
+  (define even/odd-prog (list (DefFun #f 'even '(n)
                                 (Match (Call (Global '=) (list (Local 'n) (Global 'zero)))
                                        (list
                                         (Case (PatLitr #true) (Quote #true))
@@ -540,8 +555,8 @@ That way the open version can call the closed version directly.
                                                                       (Call (Global '-)
                                                                             (list (Local 'n)
                                                                                   (Quote 1)))))))))
-                              (DefVal 'zero (Quote 0))
-                              (DefFun 'odd '(n)
+                              (DefVal #f 'zero (Quote 0))
+                              (DefFun #f 'odd '(n)
                                 (Match (Call (Global '=) (list (Local 'n) (Global 'zero)))
                                        (list
                                         (Case (PatLitr #true) (Quote #false))
@@ -551,13 +566,15 @@ That way the open version can call the closed version directly.
                                                                             (list (Local 'n)
                                                                                   (Quote 1)))))))))
 
-                              (DefVal 'seven-odd  (Call (Global 'odd)  (list (Quote 7))))
-                              (DefVal 'seven-even (Call (Global 'even) (list (Quote 7))))
+                              (DefVal #f 'seven-odd  (Call (Global 'odd)  (list (Quote 7))))
+                              (DefVal #f 'seven-even (Call (Global 'even) (list (Quote 7))))
                               (ToplevelExpr
+                               #f
                                (Call (Global '-)
                                      (list (Quote 50)
                                            (Quote 8))))
                               (ToplevelExpr
+                               #f
                                (Call (Global '+)
                                      (list (Quote 2) (Quote 3))))))
 
