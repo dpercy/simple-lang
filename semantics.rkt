@@ -130,6 +130,9 @@ But there are many more side effects it canNOT do:
   (close* denot args))
 
 (define/contract (run/args denot args) (-> DenotExpr? (hash/c symbol? any/c) any/c)
+  (for ([fv (DenotExpr-fv denot)])
+    (unless (hash-has-key? args fv)
+      (error 'run/args "unbound global: ~s" fv)))
   (run (close denot args)))
 
 (define/contract (combine-denots denots) (-> (listof DenotExpr?)

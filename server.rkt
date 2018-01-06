@@ -79,7 +79,10 @@
   (define program-sexprs (read-all-string program-string))
   (define program-stmts (parse-program program-sexprs))
   (define program-blocks (eval-program program-stmts))
-  (run-program/concurrent program-blocks globals))
+  ;(run-program/sequential program-blocks globals)
+  (run-program/concurrent program-blocks globals)
+  ;;
+  )
 
 (define prims (list
                +
