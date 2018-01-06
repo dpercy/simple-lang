@@ -24,12 +24,27 @@
   }
 
   .result {
-    border: 1px solid #adbbff;
+    border: 1px solid;
     border-radius: 3px;
     padding: 0.25em;
+    display: inline-block;
+
+    /*
+    max-width: calc(100vw - 50px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    */
+  }
+  .result.value {
+    border-color: #adbbff;
     background-color: #d6f5ff;
     color: #0000cc;
-    display: inline-block;
+  }
+  .result.error {
+    border-color: #ffcccc;
+    background-color: #ffefef;
+    color: #cc0000;
   }
 
   #save:hover:after {
@@ -79,16 +94,21 @@
     }
     lineWidgets = [];
     for (const result of json) {
-      const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result.text));
+      const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result));
       lineWidgets.push(lw);
     }
   };
   var lineWidgets = [];
 
-  function createResultWidget(text) {
+  function createResultWidget(result) {
     const elem = document.createElement('div');
-    elem.innerText = text;
-    elem.classList = 'result';
+    if (result.valueText) {
+      elem.classList = 'result value';
+      elem.innerText = result.valueText;
+    } else if (result.errorText) {
+      elem.classList = 'result error';
+      elem.innerText = result.errorText;
+    }
     return elem;
   }
 

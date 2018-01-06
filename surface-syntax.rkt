@@ -42,6 +42,7 @@
     [(? name? name) (if (set-member? locals name)
                         (Local name)
                         (Global name))]
+    [`(#:error ,msg) (Error msg)]
     [(cons (? (not/c kw?) func) args)
      (Call (parse-expr func locals)
            (for/list ([a args])
@@ -88,4 +89,4 @@
     [(PatLitr v) v]
     [(PatHole name) name]
     [(PatCtor name args) `(,name ,@(map r args))]
-    [(Error msg) `(#:fail ,msg)]))
+    [(Error msg) `(#:error ,msg)]))

@@ -58,8 +58,16 @@
   (jsexpr->string
    (for/list ([r results])
      (match r
-       [(Result endline name value) (hash 'endline endline
-                                          'text (~v value))]))))
+       [(ResultValue endline name value) (hash 'endline endline
+                                               'name (if name
+                                                         (symbol->string name)
+                                                         'null)
+                                               'valueText (~v value))]
+       [(ResultError endline name msg) (hash 'endline endline
+                                             'name (if name
+                                                       (symbol->string name)
+                                                       'null)
+                                             'errorText msg)]))))
 
 (define/contract (run! program-string) (-> string? (sequence/c Result?))
   (define program-sexprs (read-all-string program-string))

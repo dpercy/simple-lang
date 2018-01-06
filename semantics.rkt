@@ -3,7 +3,9 @@
 ; high-level interface
 (provide eval-program
          run-program/sequential
-         (struct-out Result))
+         (struct-out Result)
+         (struct-out ResultValue)
+         (struct-out ResultError))
 ; low-level interface
 (provide Block?
          block-deps
@@ -402,27 +404,36 @@ defstruct and deffun always succeed
   )
 
 
-(struct Result (endline name val) #:transparent)
+(struct Result (endline name) #:transparent)
+(struct ResultValue Result (value) #:transparent)
+(struct ResultError Result (msg) #:transparent)
 (define/contract (run-block/args block args) (-> Block? (hash/c symbol? any/c) (listof Result?))
   (match block
     [(BlockDecl (? DefStruct?)) (error 'TODO "make a new constructor")]
-    [(BlockVal el name val) (list (Result el name (run/args val args)))]
+    [(BlockVal el name val)
+
+     (with-handlers ([values (lambda (exn)
+                               (list (ResultError el name (exn-message exn))))])
+       (list (ResultValue el name (run/args val args))))]
     [(BlockFix funcs)
      (define closed-funcs (for/hash ([{name val} funcs])
                             (values name (close* val args))))
      (define closed-fixed-funcs (run/fix closed-funcs))
      (for/list ([{name val} closed-fixed-funcs])
-       (Result #f name val))]))
+       (ResultValue #f name val))]))
 
 (define/contract (run-program/sequential blocks globals) (-> (listof Block?) (hash/c symbol? any/c) (sequence/c Result?))
   (in-generator
    (for ([b blocks])
      (define results (run-block/args b globals))
      (for ([r results])
-       (match-define (Result _ name val) r)
-       (when name
-         (set! globals (hash-set globals name val)))
-       (yield r)))))
+       (match r
+         [(ResultValue _ name val) (begin
+                                     (when name
+                                       (set! globals (hash-set globals name val)))
+                                     (yield r))]
+         ; TODO what happens to things that depended on this name?
+         [(ResultError _ name msg) (yield r)])))))
 
 #|
 
@@ -553,13 +564,13 @@ That way the open version can call the closed version directly.
                                                          '= =
                                                          '+ +)))
   (check-match (sequence->list even/odd-results)
-               (list-no-order (Result _ 'zero 0)
-                              (Result _ 'even _)
-                              (Result _ 'odd _)
-                              (Result _ 'seven-odd #true)
-                              (Result _ 'seven-even #false)
-                              (Result _ #f 42)
-                              (Result _ #f 5)))
+               (list-no-order (ResultValue _ 'zero 0)
+                              (ResultValue _ 'even _)
+                              (ResultValue _ 'odd _)
+                              (ResultValue _ 'seven-odd #true)
+                              (ResultValue _ 'seven-even #false)
+                              (ResultValue _ #f 42)
+                              (ResultValue _ #f 5)))
 
   ;;
   )
