@@ -79,10 +79,81 @@
                   (values (object-name prim) prim)))
 
 (define (read-all-string str)
+  (apply
+   append
+   (for/list ([c (pad-chunks (split-chunks str))])
+
+     (read-all-string/norecover c))))
+
+(define (split-chunks str)
+  ; Chunks are delimited by a line with non-whitespace in column 1.
+  (regexp-split #rx"\n(?=[^ \t])" str))
+(module+ test
+  (check-equal? (split-chunks "x")
+                '("x"))
+  (check-equal? (split-chunks "x\ny\nz")
+                '("x" "y" "z"))
+  (check-equal? (split-chunks "x\n  y\nz")
+                '("x\n  y" "z"))
+  (check-equal? (split-chunks "x\n  y\n\n\nz")
+                '("x\n  y" "" "" "z")))
+
+(define (pad-chunks chunks)
+  (define lines 0)
+  (for/list ([c chunks])
+    (define c* (string-append (apply string-append (make-list lines "\n"))
+                              c))
+    (set! lines (+ lines
+                   (let ([newlines (or (regexp-match* "\n" c)
+                                       '())])
+                     (+ 1 (length newlines)))))
+    c*))
+(module+ test
+  (check-equal? (pad-chunks '("x"))
+                '("x"))
+  (check-equal? (pad-chunks '("x" "y"))
+                '("x" "\ny"))
+  (check-equal? (pad-chunks '("x\n  y" "z"))
+                '("x\n  y" "\n\nz"))
+  (check-equal? (pad-chunks '("x\n  y" "" "" "z"))
+                '("x\n  y" "\n\n" "\n\n\n" "\n\n\n\nz"))
+
+
+  (check-equal? (pad-chunks (split-chunks "x\n a\n b\n c\ny"))
+                '("x\n a\n b\n c" "\n\n\n\ny")))
+
+
+(define (read-all-string/norecover str)
   (with-input-from-string str
     (lambda ()
       (port-count-lines! (current-input-port))
-      (sequence->list (in-producer read-syntax eof-object?)))))
+      (sequence->list (in-producer read-syntax/safe eof-object?)))))
+(define (read-syntax/safe)
+  (with-handlers ([exn:fail:read? (lambda (exn)
+                                    (match-define
+                                      (exn:fail:read _ _
+                                                     (list
+                                                      (srcloc file line col pos span)))
+                                      exn)
+                                    (datum->syntax #f
+                                                   (list '#:error (exn-message exn))
+                                                   (list file line col pos span)))])
+    (read-syntax)))
 (module+ test
-  (check-equal? (read-all-string "() 1 a")
-                '(() 1 a)))
+  ; simple case
+  (check-equal? (map syntax->datum (read-all-string "() 1 a"))
+                '(() 1 a))
+  ; ignore bad input at end
+  (check-match (map syntax->datum (read-all-string "() 1 a ("))
+               (list '()
+                     1
+                     'a
+                     _))
+  ; ignore bad input in middle
+  ; (the recovery point is ^[^ ])
+  (check-match (map syntax->datum (read-all-string "() 1 a (\n  q\nz"))
+               (list '()
+                     1
+                     'a
+                     _
+                     'z)))
