@@ -54,21 +54,11 @@
                                                                "\n"
                                                                (exn-message exn))))])
 
-
-
-                    ''(for ([result (run! msg)])
-                        (set! output (string-append output
-                                                    "\n"
-                                                    (~v result)))
-                        (ws-send! conn output))
-
-                    (ws-send! conn
-                              (apply string-append
-                                     (add-between (map ~v (parse-program (read-all-string msg)))
-                                                  "\n")))
-
-                    ;;
-                    ))))))))
+                    (for ([result (run! msg)])
+                      (set! output (string-append output
+                                                  "\n"
+                                                  (~v result)))
+                      (ws-send! conn output))))))))))
 
 (define/contract (run! program-string) (-> string? (sequence/c Result?))
   (define program-sexprs (read-all-string program-string))

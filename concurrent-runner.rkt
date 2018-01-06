@@ -67,8 +67,10 @@ TODO handle errors as a Result
          ; update the globals and continue starting runnable blocks.
          (define some-results (async-channel-get result-batches-done))
          (define new-globals (for/fold ([globals globals]) ([r some-results])
-                               (match-define (Result name val) r)
-                               (hash-set globals name val)))
+                               (match-define (Result _ name val) r)
+                               (if name
+                                   (hash-set globals name val)
+                                   globals)))
          (start-blocks non-runnable-blocks
                        new-globals)))
      ; once all blocks have been started,
@@ -115,8 +117,8 @@ TODO handle errors as a Result
   (define program-blocks (eval-program program-stmts))
   (displayln "running...")
   (for ([result (run-program/concurrent program-blocks globals)])
-    (match-define (Result name val) result)
-    (displayln (format "~s = ~v" name val)))
+    (match-define (Result el name val) result)
+    (displayln (format "~s (at line ~v) = ~v" name el val)))
 
 
   ;;

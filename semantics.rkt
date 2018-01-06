@@ -274,14 +274,14 @@ defstruct and deffun always succeed
 (struct Block () #:transparent)
 (struct BlockDecl Block (decl) #:transparent) ; a single defstruct
 (struct BlockFix Block (funcs) #:transparent) ; functions
-(struct BlockVal Block (name val) #:transparent) ; single, maybe-named expr
+(struct BlockVal Block (endline name val) #:transparent) ; single, maybe-named expr
 
 (define/contract (block-deps block) (-> Block? (listof symbol?))
   (match block
     ; defstruct never depends on another statement
     [(BlockDecl _) '()]
     ; a toplevel expression block depends on its free variables
-    [(BlockVal _ v) (DenotExpr-fv v)]
+    [(BlockVal _ _ v) (DenotExpr-fv v)]
     ; a letrec block depends on its functions' free variables,
     ; minus the functions themselves.
     [(BlockFix funcs) (let ([fvs (foldr set-union '()
@@ -291,8 +291,8 @@ defstruct and deffun always succeed
   (match block
     [(BlockDecl (? DefStruct? ds)) (list (Def-name ds))]
     [(BlockFix funcs) (hash-keys funcs)]
-    [(BlockVal #f _) '()]
-    [(BlockVal name _) (list name)]))
+    [(BlockVal _ #f _) '()]
+    [(BlockVal _ name _) (list name)]))
 
 
 
@@ -357,8 +357,8 @@ defstruct and deffun always succeed
 
 (define/contract (eval-statement stmt) (-> Stmt? Block?)
   (match stmt
-    [(ToplevelExpr _ expr) (BlockVal #f (eval expr))]
-    [(DefVal _ name expr) (BlockVal name (eval expr))]
+    [(ToplevelExpr el expr) (BlockVal el #f (eval expr))]
+    [(DefVal el name expr) (BlockVal el name (eval expr))]
     [(DefFun _ name params body) (BlockFix (hash name (make-function params (eval body))))]
     [(? DefStruct?) (BlockDecl stmt)]))
 (define (make-function params denot-func)
@@ -386,40 +386,40 @@ defstruct and deffun always succeed
 
   ; example program
   (define prog1
-    (list (DefVal 'a (Quote 5))
+    (list (DefVal 42 'a (Quote 5))
           (DefFun 'f '(n) (Call (Global 'g) (list (Global 'a))))
           (DefFun 'g '(n) (Call (Global 'f) (list (Global 'n))))
-          (DefVal 'x (Call (Global 'f) (list (Quote 0))))
-          (ToplevelExpr (Global 'x))))
+          (DefVal 64 'x (Call (Global 'f) (list (Quote 0))))
+          (ToplevelExpr 99 (Global 'x))))
   (check-match (eval-program prog1)
-               (list (BlockVal 'a (DenotExpr '() _))
+               (list (BlockVal 42 'a (DenotExpr '() _))
                      (BlockFix (hash-table ['f (DenotExpr '(g a) _)]
                                            ['g (DenotExpr '(f) _)]))
-                     (BlockVal 'x (DenotExpr '(f) _))
-                     (BlockVal #f (DenotExpr '(x) _))))
+                     (BlockVal 64 'x (DenotExpr '(f) _))
+                     (BlockVal 99 #f (DenotExpr '(x) _))))
 
   ;;
   )
 
 
-(struct Result (name val) #:transparent)
+(struct Result (endline name val) #:transparent)
 (define/contract (run-block/args block args) (-> Block? (hash/c symbol? any/c) (listof Result?))
   (match block
     [(BlockDecl (? DefStruct?)) (error 'TODO "make a new constructor")]
-    [(BlockVal name val) (list (Result name (run/args val args)))]
+    [(BlockVal el name val) (list (Result el name (run/args val args)))]
     [(BlockFix funcs)
      (define closed-funcs (for/hash ([{name val} funcs])
                             (values name (close* val args))))
      (define closed-fixed-funcs (run/fix closed-funcs))
      (for/list ([{name val} closed-fixed-funcs])
-       (Result name val))]))
+       (Result #f name val))]))
 
 (define/contract (run-program/sequential blocks globals) (-> (listof Block?) (hash/c symbol? any/c) (sequence/c Result?))
   (in-generator
    (for ([b blocks])
      (define results (run-block/args b globals))
      (for ([r results])
-       (match-define (Result name val) r)
+       (match-define (Result _ name val) r)
        (when name
          (set! globals (hash-set globals name val)))
        (yield r)))))
@@ -553,13 +553,13 @@ That way the open version can call the closed version directly.
                                                          '= =
                                                          '+ +)))
   (check-match (sequence->list even/odd-results)
-               (list-no-order (Result 'zero 0)
-                              (Result 'even _)
-                              (Result 'odd _)
-                              (Result 'seven-odd #true)
-                              (Result 'seven-even #false)
-                              (Result #f 42)
-                              (Result #f 5)))
+               (list-no-order (Result _ 'zero 0)
+                              (Result _ 'even _)
+                              (Result _ 'odd _)
+                              (Result _ 'seven-odd #true)
+                              (Result _ 'seven-even #false)
+                              (Result _ #f 42)
+                              (Result _ #f 5)))
 
   ;;
   )
