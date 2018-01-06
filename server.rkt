@@ -5,6 +5,7 @@
          web-server/http/redirect
          )
 (require net/rfc6455)
+(require json)
 (module+ test (require rackunit))
 
 (require "core-syntax.rkt")
@@ -47,18 +48,18 @@
        (set! t (thread
                 (lambda ()
                   ; TODO update the client to accumulate results properly
-                  (define output "")
-                  (with-handlers ([exn:fail? (lambda (exn)
-                                               (ws-send! conn (string-append
-                                                               output
-                                                               "\n"
-                                                               (exn-message exn))))])
+                  (define results '())
+                  (ws-send! conn (format-results results))
+                  (for ([r (run! msg)])
+                    (set! results (cons r results))
+                    (ws-send! conn (format-results results))))))))))
 
-                    (for ([result (run! msg)])
-                      (set! output (string-append output
-                                                  "\n"
-                                                  (~v result)))
-                      (ws-send! conn output))))))))))
+(define (format-results results)
+  (jsexpr->string
+   (for/list ([r results])
+     (match r
+       [(Result endline name value) (hash 'endline endline
+                                          'text (~v value))]))))
 
 (define/contract (run! program-string) (-> string? (sequence/c Result?))
   (define program-sexprs (read-all-string program-string))

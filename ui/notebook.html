@@ -62,8 +62,27 @@
     update();
   };
   connection.onmessage = function(ev) {
-    document.getElementById('output').innerText = ev.data;
+    const text = ev.data;
+    const json = JSON.parse(text);
+
+    for (const lw of lineWidgets) {
+      lw.clear();
+    }
+    lineWidgets = [];
+    for (const result of json) {
+      const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result.text));
+      lineWidgets.push(lw);
+    }
+    document.getElementById('output').innerText = JSON.stringify(json, null, 4);
   };
+  var lineWidgets = [];
+
+  function createResultWidget(text) {
+    const elem = document.createElement('div');
+    elem.innerText = text;
+    elem.class = 'result';
+    return elem;
+  }
 
   // TODO debounce
   editor.on('change', saveInBrowser);
