@@ -94,13 +94,13 @@
                *
                ; strings
                string-split
+               substring
+               string->number
 
                ;;
                ))
-(define globals (hash-set (for/hash ([prim prims])
-                            (values (object-name prim) prim))
-                          'empty
-                          '()))
+(define globals (for/hash ([prim prims])
+                  (values (object-name prim) prim)))
 
 (define (read-all-string str)
   (apply

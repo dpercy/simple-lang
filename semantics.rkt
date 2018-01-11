@@ -258,6 +258,9 @@ But there are many more side effects it canNOT do:
                                              (append pat0-vs pats-vs)])])))]))]))
 (define make-prefab
   (match-lambda**
+   [{'empty 0}
+    (define (empty) '())
+    (values empty empty? (lambda () (error 'empty-ref "unreachable")))]
    [{'cons 2}
     (define cons-ref
       (match-lambda**
