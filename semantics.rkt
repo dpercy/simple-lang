@@ -14,7 +14,6 @@
 
 (require (prefix-in racket: racket))
 (require racket/generator)
-(require racket/struct)
 (require "core-syntax.rkt")
 (module+ test (require rackunit))
 
@@ -233,42 +232,50 @@ But there are many more side effects it canNOT do:
                               (lambda (val) (list val)))]
     [(PatCtor cname argpats)
      (define-values {make-foo foo? foo-ref} (make-prefab cname (length argpats)))
-     (match-define (DenotPat binders argpats-comp) (eval-pats argpats))
+     (match-define (DenotPat binders argpats-comp) (eval-pats argpats foo-ref 0))
      (DenotPat binders
                (lambda (val)
                  (if (foo? val)
-                     (argpats-comp (struct->list val))
+                     (argpats-comp val)
                      #false)))]))
-(define/contract (eval-pats pats) (-> (listof Pat?) DenotPat?)
+(define/contract (eval-pats pats ref i) (-> (listof Pat?) procedure? number? DenotPat?)
   (match pats
     ['() (DenotPat '()
                    (lambda (val) (list)))]
     [(cons pat0 pats) (match-let ([(DenotPat pat0-binders pat0-comp) (eval-pat pat0)]
-                                  [(DenotPat pats-binders pats-comp) (eval-pats pats)])
+                                  [(DenotPat pats-binders pats-comp) (eval-pats pats ref (+ i 1))])
                         (match (set-intersect pat0-binders pats-binders)
                           [(cons x _) (error "dup pattern variable: ~v" x)]
                           ['()
                            (DenotPat (append pat0-binders pats-binders)
                                      (lambda (val)
-                                       (match (pat0-comp (first val))
+                                       (match (pat0-comp (ref val i))
                                          [#false #false]
                                          [pat0-vs
-                                          (match (pats-comp (rest val))
+                                          (match (pats-comp val)
                                             [#false #false]
                                             [pats-vs
                                              (append pat0-vs pats-vs)])])))]))]))
-(define (make-prefab name arity)
-  (define-values {foo/type make-foo foo? foo-ref foo-set!}
-    (make-struct-type name
-                      #f
-                      arity
-                      0
-                      #f
-                      '()
-                      'prefab
-                      #f
-                      (build-list arity values)))
-  (values make-foo foo? foo-ref))
+(define make-prefab
+  (match-lambda**
+   [{'cons 2}
+    (define cons-ref
+      (match-lambda**
+       [{c 0} (car c)]
+       [{c 1} (cdr c)]))
+    (values cons cons? cons-ref)]
+   [{name arity}
+    (define-values {foo/type make-foo foo? foo-ref foo-set!}
+      (make-struct-type name
+                        #f
+                        arity
+                        0
+                        #f
+                        '()
+                        'prefab
+                        #f
+                        (build-list arity values)))
+    (values (procedure-rename make-foo name) foo? foo-ref)]))
 (module+ test
 
   (struct point (x y) #:prefab)
@@ -464,12 +471,8 @@ defstruct and deffun always succeed
                 '(xx yy zz)))
 
 (define (make-constructor name arity)
-  (define args (for/list ([i (in-range arity)])
-                 (string->symbol (format "x~v" i))))
-  (define proc
-    (racket:eval #`(lambda #,args
-                     (make-prefab-struct (quote #,name) #,@args))))
-  (procedure-rename proc name))
+  (define-values {make test? ref} (make-prefab name arity))
+  make)
 (module+ test
   (check-equal? (object-name (make-constructor 'foo 3)) 'foo)
   (check-equal? (procedure-arity (make-constructor 'foo 3)) 3)

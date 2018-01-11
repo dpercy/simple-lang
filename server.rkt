@@ -79,21 +79,28 @@
   (define program-sexprs (read-all-string program-string))
   (define program-stmts (parse-program program-sexprs))
   (define program-blocks (eval-program program-stmts))
-  ;(run-program/sequential program-blocks globals)
-  (run-program/concurrent program-blocks globals)
+  (run-program/sequential program-blocks globals)
+  ;; TODO delete the concurrent one?
+  ;(run-program/concurrent program-blocks globals)
   ;;
   )
 
 (define prims (list
+               ; numbers
                +
                -
                <
                =
                *
+               ; strings
+               string-split
+
                ;;
                ))
-(define globals (for/hash ([prim prims])
-                  (values (object-name prim) prim)))
+(define globals (hash-set (for/hash ([prim prims])
+                            (values (object-name prim) prim))
+                          'empty
+                          '()))
 
 (define (read-all-string str)
   (apply
