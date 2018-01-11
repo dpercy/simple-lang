@@ -94,8 +94,10 @@
     }
     lineWidgets = [];
     for (const result of json) {
-      const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result));
-      lineWidgets.push(lw);
+      if (typeof result.endline === 'number') {
+	const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result));
+	lineWidgets.push(lw);
+      }
     }
   };
   var lineWidgets = [];
