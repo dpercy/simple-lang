@@ -14,6 +14,7 @@
 
 (require (prefix-in racket: racket))
 (require racket/generator)
+(require racket/struct)
 (require "core-syntax.rkt")
 (module+ test (require rackunit))
 
@@ -67,7 +68,7 @@ But there are many more side effects it canNOT do:
 - no filesystem
 - no clock measurement
 - no spawning threads
-
+- no waiting for other threads
 
 |#
 
@@ -92,17 +93,12 @@ But there are many more side effects it canNOT do:
         (match-let-values ([{fv (cons func args)} (combine-denots (cons func args))])
           (DenotExpr fv
                      (apply/fv fv func args)))])]
-    [(Match test
-            (list (Case (PatLitr #true) consq)
-                  (Case (PatLitr #false) alt)))
-     ; first ensure all 3 subexprs have the same free vars
-     (match-let-values ([{fv (list test consq alt)}
+
+    [(Match test cases)
+     (match-let-values ([{fv (list arg func)}
                          (combine-denots (list (eval test)
-                                               (eval consq)
-                                               (eval alt)))])
-       ; then wire them together under a binder
-       (DenotExpr fv (if/fv fv test consq alt)))]
-    [(? Match?) (error 'TODO "for now only (match _ [#t _] [#f _]) works")]))
+                                               (eval-cases cases)))])
+       (DenotExpr fv (apply/fv fv func (list arg))))]))
 
 (define/contract (run denot) (-> closed-DenotExpr? any/c)
   (match denot
@@ -205,6 +201,87 @@ But there are many more side effects it canNOT do:
                    (if (#,test #,@fv)
                        (#,consq #,@fv)
                        (#,alt #,@fv)))))
+
+
+(struct DenotPat (binders comp) #:transparent)
+(define/contract (eval-cases cases) (-> (listof Case?) DenotExpr?)
+  (match cases
+    ['() (DenotExpr '() (lambda ()
+                          (lambda (val)
+                            (error 'match "no case for ~v" val))))]
+    [(cons (Case pat expr) cases)
+
+     (define PAT pat)
+     (match-let* ([(DenotPat binders pat) (eval-pat pat)]
+                  [expr (make-function binders (eval expr))]
+                  [cases (eval-cases cases)])
+       (match-let-values ([{fv (list expr cases)} (combine-denots (list expr cases))])
+         (DenotExpr fv
+                    (lambda fv
+                      (lambda (val)
+                        (match (pat val)
+                          [#false ((apply cases fv) val)]
+                          [bound-values (apply (apply expr fv) bound-values)]))))))]))
+(define/contract (eval-pat pat) (-> Pat? DenotPat?)
+  (match pat
+    [(PatLitr v) (DenotPat '()
+                           (lambda (val)
+                             (if (equal? val v)
+                                 '()
+                                 #false)))]
+    [(PatHole name) (DenotPat (list name)
+                              (lambda (val) (list val)))]
+    [(PatCtor cname argpats)
+     (define-values {make-foo foo? foo-ref} (make-prefab cname (length argpats)))
+     (match-define (DenotPat binders argpats-comp) (eval-pats argpats))
+     (DenotPat binders
+               (lambda (val)
+                 (if (foo? val)
+                     (argpats-comp (struct->list val))
+                     #false)))]))
+(define/contract (eval-pats pats) (-> (listof Pat?) DenotPat?)
+  (match pats
+    ['() (DenotPat '()
+                   (lambda (val) (list)))]
+    [(cons pat0 pats) (match-let ([(DenotPat pat0-binders pat0-comp) (eval-pat pat0)]
+                                  [(DenotPat pats-binders pats-comp) (eval-pats pats)])
+                        (match (set-intersect pat0-binders pats-binders)
+                          [(cons x _) (error "dup pattern variable: ~v" x)]
+                          ['()
+                           (DenotPat (append pat0-binders pats-binders)
+                                     (lambda (val)
+                                       (match (pat0-comp (first val))
+                                         [#false #false]
+                                         [pat0-vs
+                                          (match (pats-comp (rest val))
+                                            [#false #false]
+                                            [pats-vs
+                                             (append pat0-vs pats-vs)])])))]))]))
+(define (make-prefab name arity)
+  (define-values {foo/type make-foo foo? foo-ref foo-set!}
+    (make-struct-type name
+                      #f
+                      arity
+                      0
+                      #f
+                      '()
+                      'prefab
+                      #f
+                      (build-list arity values)))
+  (values make-foo foo? foo-ref))
+(module+ test
+
+  (struct point (x y) #:prefab)
+  (match-let ([(DenotPat binders comp) (eval-pat (PatCtor 'point
+                                                          (list
+                                                           (PatHole 'a)
+                                                           (PatHole 'b))))])
+    (check-equal? binders '(a b))
+    (check-equal? (comp (point 1 2)) (list 1 2))
+    (check-equal? (comp (point "spam" "eggs")) (list "spam" "eggs"))
+    (check-equal? (comp "foo") #false)))
+
+
 
 (module+ test
 

@@ -45,6 +45,6 @@ syntax:
 (struct Case (pat expr) #:transparent)
 
 (struct Pat () #:transparent)
-(struct PatLitr (value) #:transparent)
-(struct PatHole (name) #:transparent)
-(struct PatCtor (name args) #:transparent)
+(struct PatLitr Pat (value) #:transparent)
+(struct PatHole Pat (name) #:transparent)
+(struct PatCtor Pat (name args) #:transparent)
