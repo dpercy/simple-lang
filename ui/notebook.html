@@ -80,7 +80,6 @@
       connection.send(contents);
     }
 
-    // TODO debounce
     // TODO show most recent success, even when there's an error
     editor.on('change', update);
     update();
@@ -89,16 +88,18 @@
     const text = ev.data;
     const json = JSON.parse(text);
 
-    for (const lw of lineWidgets) {
-      lw.clear();
-    }
-    lineWidgets = [];
-    for (const result of json) {
-      if (typeof result.endline === 'number') {
-	const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result));
-	lineWidgets.push(lw);
+    editor.operation(() => {
+      for (const lw of lineWidgets) {
+	lw.clear();
       }
-    }
+      lineWidgets = [];
+      for (const result of json) {
+	if (typeof result.endline === 'number') {
+	  const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result));
+	  lineWidgets.push(lw);
+	}
+      }
+    });
   };
   var lineWidgets = [];
 
