@@ -34,7 +34,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    */
+     */
   }
   .result.value {
     border-color: #adbbff;
@@ -50,6 +50,27 @@
   #save:hover:after {
     content: " - drag this button to a Finder window";
   }
+
+
+  /* position results */
+  .CodeMirror-linewidget {
+    overflow: visible;
+    max-width: calc(100vw - 50px);
+  }
+  .result {
+    position: absolute;
+    right: 0;
+    bottom: -0.25em; /* undo padding */
+
+    max-width: 40vw;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+  .CodeMirror-line {
+    background-color: #eee;
+  }
+
   
 </style>
 

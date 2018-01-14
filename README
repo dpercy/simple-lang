@@ -21,16 +21,22 @@ Pure Functional Programming experiment:
     - also a way to open files later
     - simple version: drag and drop?
 
-  - better semantics
+  - DONE better semantics
     - prototype relies too much on Racket side effects
 
-  - inline output
+  - DONE inline output
     - each statement's result should go under the appropriate line
     - can ignore defs
     - errors should look different from values
 
-  - local definitions
-    - just "let" would be ok
+  - problem with inline output:
+    - changing *any* cell causes *all* cells to *vanish* then *reappear*
+    - solutions
+      - make cells change instead of vanishing and reappearing?
+      - make cells grey out instead of vanishing?
+        - let server return an "in progress" indicator for these
+    
+
 
   - prove it! by doing advent of code
     - work slowly
