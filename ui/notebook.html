@@ -98,7 +98,7 @@
       if (timer) {
 	clearTimeout(timer);
       }
-      setTimeout(() => { func(...args); }, delayMillis);
+      timer = setTimeout(() => { func(...args); }, delayMillis);
     };
   }
 
@@ -119,9 +119,10 @@
     editor.on('change', update);
     update();
   };
-  connection.onmessage = debounce(500, function(ev) {
+  connection.onmessage = debounce(150, function(ev) {
     const text = ev.data;
     const json = JSON.parse(text);
+    console.log('applying', json.length, 'results:', json.map(doc => doc.name));
 
     //editor.operation(() => {
       for (const lw of lineWidgets) {
