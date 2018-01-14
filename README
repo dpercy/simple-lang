@@ -51,17 +51,13 @@ Pure Functional Programming experiment:
 	- specifically, each new STMT can use its old value if all its (transitively) reachable deps are unchanged
 
     
-    - TODO paren edits should not bork other definitions' parsing
+    - DONE paren edits should not bork other definitions' parsing
       - hack version: break input at each toplevel indentation
 
-    - TODO avoid polling in in-rendered-evaluation
+    - DONE avoid polling in in-rendered-evaluation
 
-    - TODO avoid leaking threads that don't terminate
-      - try suspending all threads in the old state,
-        then resuming in the new state,
-	then letting the old state become unreachable.
-	because "A thread that has not terminated can be garbage collected (see Garbage Collection) if it is unreachable and suspended"
-	https://docs.racket-lang.org/reference/threads.html
+    - DONE avoid leaking threads that don't terminate
+      - yay custodians
 
 
 
