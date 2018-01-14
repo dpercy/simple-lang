@@ -28,17 +28,8 @@ Pure Functional Programming experiment:
     - each statement's result should go under the appropriate line
     - can ignore defs
     - errors should look different from values
-
-  - problem with inline output:
-    - changing *any* cell causes *all* cells to *vanish* then *reappear*
-    - solutions
-      - make cells change instead of vanishing and reappearing?
-      - make cells grey out instead of vanishing?
-        - let server return an "in progress" indicator for these
-    
-
-
-  - prove it! by doing advent of code
+ 
+ - prove it! by doing advent of code
     - work slowly
     - create tickets
     - save my work
