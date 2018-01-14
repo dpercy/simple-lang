@@ -67,6 +67,20 @@
 <script src="vendor/codemirror.js"></script>
 <script src="vendor/scrollpastend.js"></script>
 <script>
+  // wrap a void function,
+  // so that calling it will be delayed to avoid duplicate calls.
+  // only the most recent arglist is passed.
+  function debounce(delayMillis, func) {
+    var timer = null;
+    return (...args) => {
+      if (timer) {
+	clearTimeout(timer);
+      }
+      setTimeout(() => { func(...args); }, delayMillis);
+    };
+  }
+
+  
   var editor = CodeMirror.fromTextArea(myTextarea, {
     scrollPastEnd: true,
     lineNumbers: true
@@ -81,14 +95,15 @@
     }
 
     // TODO show most recent success, even when there's an error
+    // TODO why does everything flip out even with debouncing???
     editor.on('change', update);
     update();
   };
-  connection.onmessage = function(ev) {
+  connection.onmessage = debounce(500, function(ev) {
     const text = ev.data;
     const json = JSON.parse(text);
 
-    editor.operation(() => {
+    //editor.operation(() => {
       for (const lw of lineWidgets) {
 	lw.clear();
       }
@@ -99,8 +114,8 @@
 	  lineWidgets.push(lw);
 	}
       }
-    });
-  };
+  //});
+  });
   var lineWidgets = [];
 
   function createResultWidget(result) {
