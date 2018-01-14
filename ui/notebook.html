@@ -24,9 +24,9 @@
   }
 
   .result {
-    border: 1px solid;
+    /* border: 1px solid; */
     border-radius: 3px;
-    padding: 0.25em;
+    /* padding: 0.25em; */
     display: inline-block;
 
     /*
@@ -38,7 +38,8 @@
   }
   .result.value {
     border-color: #adbbff;
-    background-color: #d6f5ff;
+    /*background-color: #d6f5ff;*/
+    background-color: white;
     color: #0000cc;
   }
   .result.error {
@@ -60,7 +61,7 @@
   .result {
     position: absolute;
     right: 0;
-    bottom: -0.25em; /* undo padding */
+    bottom: 0;
 
     max-width: 40vw;
     white-space: nowrap;
@@ -115,8 +116,6 @@
       connection.send(contents);
     }
 
-    // TODO show most recent success, even when there's an error
-    // TODO why does everything flip out even with debouncing???
     editor.on('change', update);
     update();
   };
@@ -151,7 +150,6 @@
     return elem;
   }
 
-  // TODO debounce
   editor.on('change', saveInBrowser);
   filenameInput.addEventListener('change', saveInBrowser);
   function saveInBrowser() {
