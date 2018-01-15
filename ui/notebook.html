@@ -208,6 +208,7 @@
       const reader = new FileReader();
       reader.addEventListener('loadend', ev => {
 	const text = ev.srcElement.result;
+	filenameInput.value = file.name;
 	editor.setValue(text);
       });
       reader.readAsText(file);
