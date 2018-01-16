@@ -92,10 +92,14 @@
                <
                =
                *
+               /
                ; strings
                string-split
                substring
                string->number
+               string-length
+               ; generic
+               equal?
 
                ;;
                ))
