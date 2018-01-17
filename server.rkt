@@ -11,7 +11,6 @@
 (require "core-syntax.rkt")
 (require "surface-syntax.rkt")
 (require "semantics.rkt")
-(require "concurrent-runner.rkt")
 
 (define (run-eval-server!)
   (define shutdown-ws-server! (run-ws-server!))
@@ -96,6 +95,10 @@
                string-length
                ; generic
                equal?
+
+               ; functions
+               curry
+               (procedure-rename curryr 'curryr)
 
                ;;
                ))
