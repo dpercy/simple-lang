@@ -20,6 +20,36 @@ Pure Functional Programming experiment:
     - GLSL
 
 
+  Implementation approach:
+    - have:  Racket interp: SL
+        - ~600 lines
+    - want:  __ compile: SL to: JS              # avoid an eval server
+    - want:  JS compile: SL to: JS              # avoid a compile server
+    - want:  JS compile: SL to: Stream[Expr]    # debug with no eval/compile server
+
+
+    steps:
+    A: write a #lang for SL
+      - parse strictly - don't just allow any old Racket code
+      - include #' for conveniently writing syntax
+
+      - how do modules work? qualified names?
+        -
+
+
+      - prims?
+        - no. only structs.
+
+    B(A): write an SL to JS compiler in SL
+      - include faithful errors
+
+    C(A): write an SL interpreter in SL
+
+    
+
+
+
+
 
 
 - Goal 3: conventional syntax
