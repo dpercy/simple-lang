@@ -12,7 +12,7 @@ Pure Functional Programming experiment:
     - DONE output shows each def/expr as "done", "running", or "crashed"
 
 
-  - better syntax - not s-expressions
+  - better syntax? - not s-expressions
     - implementing this parser might be a good POC for the language
       - no need for quote yet - just make up some structs
 

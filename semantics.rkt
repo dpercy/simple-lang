@@ -533,7 +533,8 @@ defstruct and deffun always succeed
                                      (when name
                                        (set! globals (hash-set globals name val)))
                                      (yield r))]
-         ; TODO what happens to things that depended on this name?
+         ; If this statement failed, just yield the result and don't update globals.
+         ; Any other statement that depended on this one will get an undefined global error.
          [(ResultError _ name msg) (yield r)])))))
 
 #|

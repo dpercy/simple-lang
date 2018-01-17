@@ -79,11 +79,7 @@
   (define program-sexprs (read-all-string program-string))
   (define program-stmts (parse-program program-sexprs))
   (define program-blocks (eval-program program-stmts))
-  (run-program/sequential program-blocks globals)
-  ;; TODO delete the concurrent one?
-  ;(run-program/concurrent program-blocks globals)
-  ;;
-  )
+  (run-program/sequential program-blocks globals))
 
 (define prims (list
                ; numbers
