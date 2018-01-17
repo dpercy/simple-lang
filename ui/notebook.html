@@ -43,9 +43,15 @@
     color: #0000cc;
   }
   .result.error {
-    border-color: #ffcccc;
-    background-color: #ffefef;
-    color: #cc0000;
+    /*
+       Don't use red for error messages!
+       It shouldn't be like a bad grade on a test.
+       
+       Maybe orange has fewer bad connotations.
+     */ 
+    border-color: #ffe9cc;
+    background-color: #fff7ef;
+    color: #cc6600;
   }
 
   #save:hover:after {
@@ -56,7 +62,6 @@
   /* position results */
   .CodeMirror-linewidget {
     overflow: visible;
-    max-width: calc(100vw - 50px);
   }
   .result {
     position: absolute;
@@ -67,6 +72,13 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow: hidden;
+  }
+  .result:hover {
+    max-width: 90vw;
+    background-color: #ffffdd;
+    white-space: pre-wrap;
+    padding: 1em;
+    border: 1px solid #eeeebb;
   }
   .CodeMirror-line {
     background-color: #eee;
