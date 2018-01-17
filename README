@@ -12,16 +12,19 @@ Pure Functional Programming experiment:
     - DONE output shows each def/expr as "done", "running", or "crashed"
 
 
-  - better syntax? - not s-expressions
-    - implementing this parser might be a good POC for the language
-      - no need for quote yet - just make up some structs
-
-  
-
 
 - Goal 2: alt backends
     - expandable debug trace
     - JS
     - asm.js or Webassembly
     - GLSL
-- 
+
+
+- Goal 3: conventional syntax
+    - infix math
+    - conventional f(x, y) function calls
+    - infix "=" for definitions
+
+    - implementing this parser in the lang itself would
+      avoid having to reimplement it
+  
