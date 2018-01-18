@@ -35,6 +35,9 @@ Anti-Goal: integration with Racket ecosystem
                      [sl:cons cons]
                      [sl:Z Z]
                      [sl:S S])
+         ; primitives for dealing with strings
+         explode
+         implode
 
          ;;
          )
@@ -45,7 +48,7 @@ Anti-Goal: integration with Racket ecosystem
 
 (define-syntax (sl:error stx)
   (syntax-case stx ()
-    [(_ . v) (string? (syntax-e #'v)) #'(error v)]))
+    [(_ v) (string? (syntax-e #'v)) #'(error v)]))
 
 (define-syntax (sl:#%datum stx)
   (syntax-case stx ()
@@ -76,3 +79,8 @@ Anti-Goal: integration with Racket ecosystem
   (syntax-rules () [(_ n) (? exact-positive-integer?
                              (app sub1 n))])
   (syntax-rules () [(_ n) (add1 n)]))
+
+(define (explode str)
+  (map char->integer (string->list str)))
+(define (implode charcodes)
+  (list->string (map integer->char charcodes)))

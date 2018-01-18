@@ -22,6 +22,20 @@
     [(Z) (first lst)]
     [(S n) (list-ref (rest lst) n)]))
 
+(def (take n lst)
+  (match n
+    [(Z) (empty)]
+    [(S n*) (match lst
+              [(empty) (error "take: ran out of elements")]
+              [(cons x xs) (cons x (take n* xs))])]))
+
+(def (drop n lst)
+  (match n
+    [(Z) lst]
+    [(S n*) (match lst
+              [(empty) (error "drop: ran out of elements")]
+              [(cons x xs) (drop n* xs)])]))
+
 (def (map f lst)
   (match lst
     [(empty) (empty)]
