@@ -20,6 +20,12 @@
               [(Z) (error "subtraction: went below zero")]
               [(S x*) (- x* y*)])]))
 
+(def (* x y)
+  (match x
+    [(Z) (Z)]
+    ; (* (S n) y) = (* (+ 1 n) y) = (+ (* 1 y) (* n y)) = (+ y (* n y))
+    [(S n) (+ y (* n y))]))
+
 (struct (Less))
 (struct (Equal))
 (struct (Greater))

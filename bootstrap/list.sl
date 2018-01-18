@@ -48,3 +48,23 @@
     [(cons x xs) (match (f x)
                    [(true) (cons x (filter f xs))]
                    [(false) (filter f xs)])]))
+
+(def (reverse lst)
+  (revappend lst (empty)))
+
+(def (revappend lst onto)
+  (match lst
+    [(empty) onto]
+    [(cons x xs) (revappend xs (cons x onto))]))
+
+(def (andmap f lst)
+  (match lst
+    [(empty) (true)]
+    [(cons x xs) (match (f x)
+                   [(false) (false)]
+                   [(true) (andmap f xs)])]))
+
+(def (append lst onto)
+  (match lst
+    [(empty) onto]
+    [(cons x xs) (cons x (append xs onto))]))

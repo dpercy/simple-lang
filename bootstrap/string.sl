@@ -6,10 +6,20 @@
 (def (string-length str)
   (length (explode str)))
 
+(def (string-append x y)
+  (implode (append (explode x)
+                   (explode y))))
+
+(def (string-chars s)
+  (map chr (explode s)))
+
 (def (substring s start end)
   (implode (take (- end start)
                  (drop start
                        (explode s)))))
+
+(def (substring* s start)
+  (substring s start (string-length s)))
 
 (def (ord s)
   (match (explode s)
