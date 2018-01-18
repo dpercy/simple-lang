@@ -32,9 +32,14 @@ Pure Functional Programming experiment:
     A: write a #lang for SL
       - parse strictly - don't just allow any old Racket code
       - include #' for conveniently writing syntax
+        - or not? write parser in object language too.
 
-      - how do modules work? qualified names?
-        -
+      - how do modules work? and qualified names?
+        how about the roughly-Java way of doing it:
+	- can use fq names without imports
+	- imports just abbreviate names
+	- the compiler can syntactically determine which modules you depend on,
+	  just by looking at every identifier
 
 
       - prims?
