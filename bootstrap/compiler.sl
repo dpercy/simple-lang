@@ -73,9 +73,20 @@
   (match s
     ["" ""]
     [s
-     (match (whitespace? (substring s 0 1))
-       [(true) (drop-whitespace (substring* s 1))]
-       [(false) s])]))
+     (match (substring s 0 1)
+       [";" (drop-whitespace (drop-comment s))]
+       [c
+        (match (whitespace? c)
+          [(true) (drop-whitespace (substring* s 1))]
+          [(false) s])])]))
+
+(def (drop-comment s)
+  (match s
+    ["" ""]
+    [s
+     (match (substring s 0 1)
+       ["\n" (substring* s 1)]
+       [c (drop-comment (substring* s 1))])]))
 
 (def (read-list end s)
   (match (drop-whitespace s)
@@ -93,8 +104,18 @@
   (match (substring s 0 1)
     ["\"" (VS "" (substring* s 1))]
     ; TODO update emit-quoted-constant if we add escapes
-    ["\\" (error "escapes are not supported")]
+    ["\\" (read-string/escape (substring* s 1))]
     ["\n" (error "multiline strings are not supported")]
+    [c (match (read-string (substring* s 1))
+         [(VS t s) (VS (string-append c t) s)])]))
+
+(def (read-string/escape s)
+  (match (match (substring s 0 1)
+           ["n" "\n"]
+           ["t" "\t"]
+           ["\"" "\""]
+           ["\\" "\\"]
+           [c (error "unrecognized escape")])
     [c (match (read-string (substring* s 1))
          [(VS t s) (VS (string-append c t) s)])]))
 
@@ -179,13 +200,13 @@
 
 
 ; - read example
-(read "( ()()((())) )  ")
-(read "  (match lst [(cons x xs) hi])  ")
-(read "  (match lst [(cons 12345) \"string literal\"])  ")
-(read-all "1")
-(read-all " 1 ")
-(read-all " 1 2 ")
-(read-all " 1 2 3")
+;(read "( ()()((())) )  ")
+;(read "  (match lst [(cons x xs) hi])  ")
+;(read "  (match lst [(cons 12345) \"string literal\"])  ")
+;(read-all "1")
+;(read-all " 1 ")
+;(read-all " 1 2 ")
+;(read-all " 1 2 3")
 
 
 ; parse ...
@@ -260,7 +281,14 @@
                                  ") { return "
                                  (gen-expr body)
                                  "; }\n"))]
-    [(DefStruct name params) (error "TODO structs")]))
+
+    [(DefStruct name params) (string-append*
+                              (list
+                               "// TODO struct "
+                               name
+                               (commas params)))]
+    ;[(DefStruct name params) (error "TODO structs")]
+    ))
 
 (def (gen-expr expr)
   ; generate a JS expr, as a string
@@ -311,9 +339,8 @@
     [(cons x xs) (string-append* (list x ", " (commas xs)))]))
 
 (def (emit-name name)
-  (match (andmap alpha? (string-chars name))
-    [(true) name]
-    [(false) (error "TODO escape names to JS ids")]))
+  ; TODO safer escaping
+  (string-append* (filter alpha? (string-chars name))))
 
 (def (emit-error msg)
   (string-append*
@@ -324,14 +351,14 @@
 
 
 
-(gen-expr (parse-expr (read-one "  (add 2 3)  ")))
-(gen-expr (parse-expr (read-one "  (error \"ouch\")  ")))
-(gen-expr (parse-expr (read-one "  (match (f x) [(true) ok] [(false) bad])")))
+;(gen-expr (parse-expr (read-one "  (add 2 3)  ")))
+;(gen-expr (parse-expr (read-one "  (error \"ouch\")  ")))
+;(gen-expr (parse-expr (read-one "  (match (f x) [(true) ok] [(false) bad])")))
 
-(gen-program
- (parse-program
-  (read-all
+;(gen-program (parse-program (read-all "(def x 1) (def y 2) (add x y) (def (add x y) (plus x y))")))
 
-   "(def x 1) (def y 2) (add x y) (def (add x y) (plus x y))"
 
-   )))
+(def (compile-program s)
+  (gen-program
+   (parse-program
+    (read-all s))))
