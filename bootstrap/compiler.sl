@@ -214,7 +214,7 @@
      (match sexpr
        [(SelfQuoting v)  (Quote v)]
        [(cons "error" (cons (SelfQuoting msg) (empty)))  (Error msg)]
-       [(cons "match" (cons scrutinee (cons cases (empty))))
+       [(cons "match" (cons scrutinee cases))
         (Match (parse-expr scrutinee)
                (map parse-case cases))]
        [(cons func args) (Call (parse-expr func)
@@ -251,7 +251,16 @@
     [(Var name) (emit-name name)]
     [(Error msg) (emit-error msg)]
     [(Call func args) (emit-call (gen-expr func)
-                                 (map gen-expr args))]))
+                                 (map gen-expr args))]
+    [(Match test
+            (cons
+             (Case (PatCtor "true" (empty)) consq)
+             (cons
+              (Case (PatCtor "false" (empty)) alt)
+              (empty))))
+     (emit-if (gen-expr test)
+              (gen-expr consq)
+              (gen-expr alt))]))
 
 (def (emit-quoted-constant v)
   (match (string? v)
@@ -294,7 +303,6 @@
                                                (commas xs)))]))
 
 (def (emit-name name)
-  ; TODO escape names so they're valid JS identifiers
   (match (andmap alpha? (string-chars name))
     [(true) name]
     [(false) (error "TODO escape names to JS ids")]))
@@ -304,7 +312,24 @@
                  (string-append (emit-quoted-string msg)
                                 "; })() )")))
 
+(def (emit-if test consq alt)
+  ; TODO stop this; add (list ...) ctor or variadic functions or something
+  (string-append
+   "("
+   (string-append
+    test
+    (string-append
+     "?"
+     (string-append
+      consq
+      (string-append
+       ":"
+       (string-append
+        alt
+        ")")))))))
+
 
 
 (gen-expr (parse-expr (read-one "  (add 2 3)  ")))
 (gen-expr (parse-expr (read-one "  (error \"ouch\")  ")))
+(gen-expr (parse-expr (read-one "  (match (f x) [(true) ok] [(false) bad])")))

@@ -46,7 +46,7 @@ Pure Functional Programming experiment:
         - no. only structs.
 
     B(A): write an SL to JS compiler in SL
-      - include faithful errors
+      - include faithful errors?
 
     C(A): write an SL interpreter in SL
 
