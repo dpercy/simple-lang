@@ -38,7 +38,7 @@
 
 (def (read-one s)
   (match (read-all s)
-    [(cons v (empty)) v]
+    [(list v) v]
     [(empty) (error "no s-expressions in string")]
     [more (error "expected only one s-expression in string")]))
 
@@ -195,16 +195,9 @@
 
 (def (parse-stmt sexpr)
   (match sexpr
-    [(cons "def"
-           (cons (cons name params)
-                 (cons expr (empty)))) (DefFun name params (parse-expr expr))]
-    [(cons "def"
-           (cons name
-                 (cons expr
-                       (empty)))) (DefVal name (parse-expr expr))]
-    [(cons "struct"
-           (cons (cons name params)
-                 (empty))) (DefStruct name params)]
+    [(list "def" (cons name params) body) (DefFun name params (parse-expr body))]
+    [(list "def" name expr) (DefVal name (parse-expr expr))]
+    [(list "struct" (cons name params)) (DefStruct name params)]
     [sexpr (ToplevelExpr (parse-expr sexpr))]))
 
 (def (parse-expr sexpr)
@@ -213,18 +206,16 @@
     [(false)
      (match sexpr
        [(SelfQuoting v)  (Quote v)]
-       [(cons "error" (cons (SelfQuoting msg) (empty)))  (Error msg)]
-       [(cons "match" (cons scrutinee cases))
-        (Match (parse-expr scrutinee)
-               (map parse-case cases))]
-       [(cons func args) (Call (parse-expr func)
-                               (map parse-expr args))])]))
+       [(list "error" (SelfQuoting msg))  (Error msg)]
+       [(cons "match" (cons scrutinee cases))  (Match (parse-expr scrutinee)
+                                                      (map parse-case cases))]
+       [(cons func args)  (Call (parse-expr func)
+                                (map parse-expr args))])]))
 
 (def (parse-case sexpr)
   (match sexpr
-    [(cons pat (cons expr (empty)))
-     (Case (parse-pat pat)
-           (parse-expr expr))]))
+    [(list pat expr)  (Case (parse-pat pat)
+                            (parse-expr expr))]))
 
 (def (parse-pat sexpr)
   (match (string? sexpr)
@@ -253,28 +244,22 @@
   ; generate a JS statement, as a string
   (match stmt
     [(ToplevelExpr e) (string-append (gen-expr e) ";\n")]
-    [(DefVal name e) (string-append
-                      "const "
-                      (string-append
+    [(DefVal name e) (string-append*
+                      (list
+                       "const "
                        (emit-name name)
-                       (string-append
-                        " = "
-                        (string-append
-                         (gen-expr e)
-                         ";\n"))))]
-    [(DefFun name params body) (string-append
-                                "function "
-                                (string-append
+                       " = "
+                       (gen-expr e)
+                       ";\n"))]
+    [(DefFun name params body) (string-append*
+                                (list
+                                 "function "
                                  (emit-name name)
-                                 (string-append
-                                  "("
-                                  (string-append
-                                   (commas params)
-                                   (string-append
-                                    ") { return "
-                                    (string-append
-                                     (gen-expr body)
-                                     "; }\n"))))))]
+                                 "("
+                                 (commas params)
+                                 ") { return "
+                                 (gen-expr body)
+                                 "; }\n"))]
     [(DefStruct name params) (error "TODO structs")]))
 
 (def (gen-expr expr)
@@ -286,11 +271,9 @@
     [(Call func args) (emit-call (gen-expr func)
                                  (map gen-expr args))]
     [(Match test
-            (cons
+            (list
              (Case (PatCtor "true" (empty)) consq)
-             (cons
-              (Case (PatCtor "false" (empty)) alt)
-              (empty))))
+             (Case (PatCtor "false" (empty)) alt)))
      (emit-if (gen-expr test)
               (gen-expr consq)
               (gen-expr alt))]))
@@ -305,10 +288,7 @@
 (def (emit-quoted-string s)
   ; emit a JS expression that evaluates to the same string as s.
   ; for now, escapes are not supported!
-  (string-append "\""
-                 (string-append
-                  s
-                  "\"")))
+  (string-append* (list "\"" s "\"")))
 
 (def (emit-natural v)
   ; represent nats as JS numbers.
@@ -317,23 +297,18 @@
 
 (def (emit-call func args)
   ; func and args are already JS expressions (strings).
-  (string-append
-   "((1,"
-   (string-append
-    func
-    (string-append
-     ")("
-     (string-append
-      (commas args)
-      "))")))))
+  (string-append*
+   (list "((1,"
+         func
+         ")("
+         (commas args)
+         "))")))
 
 (def (commas strings)
   (match strings
     [(empty) ""]
-    [(cons last (empty)) last]
-    [(cons x xs) (string-append x
-                                (string-append ", "
-                                               (commas xs)))]))
+    [(list last) last]
+    [(cons x xs) (string-append* (list x ", " (commas xs)))]))
 
 (def (emit-name name)
   (match (andmap alpha? (string-chars name))
@@ -341,25 +316,11 @@
     [(false) (error "TODO escape names to JS ids")]))
 
 (def (emit-error msg)
-  (string-append "( (() => { throw "
-                 (string-append (emit-quoted-string msg)
-                                "; })() )")))
+  (string-append*
+   (list "( (() => { throw " (emit-quoted-string msg) "; })() )")))
 
 (def (emit-if test consq alt)
-  ; TODO stop this; add (list ...) ctor or variadic functions or something
-  (string-append
-   "("
-   (string-append
-    test
-    (string-append
-     "?"
-     (string-append
-      consq
-      (string-append
-       ":"
-       (string-append
-        alt
-        ")")))))))
+  (string-append* (list "(" test "?" consq ":" alt ")")))
 
 
 
