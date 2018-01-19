@@ -5,7 +5,7 @@
 
 ; statements
 (struct (DefVal name expr))
-(struct (DefFun name params expr))
+(struct (DefFun name params body))
 (struct (DefStruct name params))
 (struct (ToplevelExpr expr))
 
@@ -245,7 +245,40 @@
 
 ; translate to JS ...
 
+(def (gen-program stmts)
+  ; generate a sequence of JS statements, as one string
+  (string-append* (map gen-stmt stmts)))
+
+(def (gen-stmt stmt)
+  ; generate a JS statement, as a string
+  (match stmt
+    [(ToplevelExpr e) (string-append (gen-expr e) ";\n")]
+    [(DefVal name e) (string-append
+                      "const "
+                      (string-append
+                       (emit-name name)
+                       (string-append
+                        " = "
+                        (string-append
+                         (gen-expr e)
+                         ";\n"))))]
+    [(DefFun name params body) (string-append
+                                "function "
+                                (string-append
+                                 (emit-name name)
+                                 (string-append
+                                  "("
+                                  (string-append
+                                   (commas params)
+                                   (string-append
+                                    ") { return "
+                                    (string-append
+                                     (gen-expr body)
+                                     "; }\n"))))))]
+    [(DefStruct name params) (error "TODO structs")]))
+
 (def (gen-expr expr)
+  ; generate a JS expr, as a string
   (match expr
     [(Quote v) (emit-quoted-constant v)]
     [(Var name) (emit-name name)]
@@ -333,3 +366,11 @@
 (gen-expr (parse-expr (read-one "  (add 2 3)  ")))
 (gen-expr (parse-expr (read-one "  (error \"ouch\")  ")))
 (gen-expr (parse-expr (read-one "  (match (f x) [(true) ok] [(false) bad])")))
+
+(gen-program
+ (parse-program
+  (read-all
+
+   "(def x 1) (def y 2) (add x y) (def (add x y) (plus x y))"
+
+   )))
