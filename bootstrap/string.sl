@@ -10,6 +10,11 @@
   (implode (append (explode x)
                    (explode y))))
 
+(def (string-append* strings)
+  (match strings
+    [(empty) ""]
+    [(cons s ss) (string-append s (string-append* ss))]))
+
 (def (string-chars s)
   (map chr (explode s)))
 

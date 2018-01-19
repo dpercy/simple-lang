@@ -4,6 +4,12 @@
 ; (struct (Z))
 ; (struct (S n))
 
+(def (natural? v)
+  (match v
+    [(Z) (true)]
+    [(S n) (true)]
+    [v (false)]))
+
 (def (pred n)
   (match n
     [(S w) w]))
@@ -25,6 +31,17 @@
     [(Z) (Z)]
     ; (* (S n) y) = (* (+ 1 n) y) = (+ (* 1 y) (* n y)) = (+ y (* n y))
     [(S n) (+ y (* n y))]))
+
+(def (div x y)
+  (match (< x y)
+    [(true) (Z)]
+    [(false)  (S (div (- x y) y))]))
+
+(def (mod x y)
+  (match (< x y)
+    [(true) x]
+    [(false) (mod (- x y) y)]))
+
 
 (struct (Less))
 (struct (Equal))

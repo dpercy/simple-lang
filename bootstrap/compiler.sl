@@ -11,9 +11,8 @@
 
 ; expressions
 (struct (Quote val))
+(struct (Var name))
 (struct (Error msg))
-(struct (Local name))
-(struct (Global name))
 (struct (Call func args))
 (struct (Match scrutinee cases))
 
@@ -36,6 +35,12 @@
 
 (struct (VS value string))
 (struct (SelfQuoting value))
+
+(def (read-one s)
+  (match (read-all s)
+    [(cons v (empty)) v]
+    [(empty) (error "no s-expressions in string")]
+    [more (error "expected only one s-expression in string")]))
 
 (def (read-all s) ; list of s-exprs
   (match (drop-whitespace s)
@@ -65,9 +70,12 @@
 
 (def (drop-whitespace s)
   ; TODO handle comments
-  (match (whitespace? (substring s 0 1))
-    [(true) (drop-whitespace (substring* s 1))]
-    [(false) s]))
+  (match s
+    ["" ""]
+    [s
+     (match (whitespace? (substring s 0 1))
+       [(true) (drop-whitespace (substring* s 1))]
+       [(false) s])]))
 
 (def (read-list end s)
   (match (drop-whitespace s)
@@ -84,6 +92,7 @@
 (def (read-string s)
   (match (substring s 0 1)
     ["\"" (VS "" (substring* s 1))]
+    ; TODO update emit-quoted-constant if we add escapes
     ["\\" (error "escapes are not supported")]
     ["\n" (error "multiline strings are not supported")]
     [c (match (read-string (substring* s 1))
@@ -117,8 +126,18 @@
 (def (string->natural s)
   (rev-digits->natural (map digit-value (reverse (explode s)))))
 
+(def (natural->string n)
+  (match (string-append* (reverse (natural->rev-digits n)))
+    ; An "empty natural literal" isn't a thing,
+    ; so replace it with zero.
+    ["" "0"]
+    [s s]))
+
 (def (digit-value c)
   (- c (ord "0")))
+
+(def (digit val)
+  (chr (+ val (ord "0"))))
 
 (def (rev-digits->natural revdigits)
   (match revdigits
@@ -126,6 +145,13 @@
     [(cons lowdigit higherdigits)
      (+ (* 10 (rev-digits->natural higherdigits))
         lowdigit)]))
+
+(def (natural->rev-digits n)
+  (match n
+    [(Z) (empty)]
+    [n
+     (cons (digit (mod n 10))
+           (natural->rev-digits (div n 10)))]))
 
 (def (symbol-char? c)
   (and3 (graphical? c)
@@ -156,10 +182,129 @@
 (read "( ()()((())) )  ")
 (read "  (match lst [(cons x xs) hi])  ")
 (read "  (match lst [(cons 12345) \"string literal\"])  ")
+(read-all "1")
+(read-all " 1 ")
+(read-all " 1 2 ")
+(read-all " 1 2 3")
 
 
 ; parse ...
 
+(def (parse-program sexprs)
+  (map parse-stmt sexprs))
 
-; validate ...
+(def (parse-stmt sexpr)
+  (match sexpr
+    [(cons "def"
+           (cons (cons name params)
+                 (cons expr (empty)))) (DefFun name params (parse-expr expr))]
+    [(cons "def"
+           (cons name
+                 (cons expr
+                       (empty)))) (DefVal name (parse-expr expr))]
+    [(cons "struct"
+           (cons (cons name params)
+                 (empty))) (DefStruct name params)]
+    [sexpr (ToplevelExpr (parse-expr sexpr))]))
+
+(def (parse-expr sexpr)
+  (match (string? sexpr)
+    [(true)  (Var sexpr)]
+    [(false)
+     (match sexpr
+       [(SelfQuoting v)  (Quote v)]
+       [(cons "error" (cons (SelfQuoting msg) (empty)))  (Error msg)]
+       [(cons "match" (cons scrutinee (cons cases (empty))))
+        (Match (parse-expr scrutinee)
+               (map parse-case cases))]
+       [(cons func args) (Call (parse-expr func)
+                               (map parse-expr args))])]))
+
+(def (parse-case sexpr)
+  (match sexpr
+    [(cons pat (cons expr (empty)))
+     (Case (parse-pat pat)
+           (parse-expr expr))]))
+
+(def (parse-pat sexpr)
+  (match (string? sexpr)
+    [(true)  (PatHole sexpr)]
+    [(false)
+     (match sexpr
+       [(SelfQuoting v)  (PatLitr v)]
+       [(cons cname args) (PatCtor cname (map parse-pat args))])]))
+
+
+; TODO validate ...
+
+
+
+; desugar match??
+; translate each pattern to an expression that returns (false) or a list
+
+
 ; translate to JS ...
+
+(def (gen-expr expr)
+  (match expr
+    [(Quote v) (emit-quoted-constant v)]
+    [(Var name) (emit-name name)]
+    [(Error msg) (emit-error msg)]
+    [(Call func args) (emit-call (gen-expr func)
+                                 (map gen-expr args))]))
+
+(def (emit-quoted-constant v)
+  (match (string? v)
+    [(true) (emit-quoted-string v)]
+    [(false)
+     (match (natural? v)
+       [(true) (emit-natural v)])]))
+
+(def (emit-quoted-string s)
+  ; emit a JS expression that evaluates to the same string as s.
+  ; for now, escapes are not supported!
+  (string-append "\""
+                 (string-append
+                  s
+                  "\"")))
+
+(def (emit-natural v)
+  ; represent nats as JS numbers.
+  ; it's fine if they don't get too big.
+  (natural->string v))
+
+(def (emit-call func args)
+  ; func and args are already JS expressions (strings).
+  (string-append
+   "((1,"
+   (string-append
+    func
+    (string-append
+     ")("
+     (string-append
+      (commas args)
+      "))")))))
+
+(def (commas strings)
+  (match strings
+    [(empty) ""]
+    [(cons last (empty)) last]
+    [(cons x xs) (string-append x
+                                (string-append ", "
+                                               (commas xs)))]))
+
+(def (emit-name name)
+  ; TODO escape names so they're valid JS identifiers
+  (match (andmap alpha? (string-chars name))
+    [(true) name]
+    [(false) (error "TODO escape names to JS ids")]))
+
+(def (emit-error msg)
+  (string-append "( (() => { throw "
+                 (string-append (emit-quoted-string msg)
+                                "; })() )")))
+
+
+
+(gen-expr (parse-expr (read-one "  (add 2 3)  ")))
+(gen-expr (parse-expr (read-one "  (error \"ouch\")  ")))

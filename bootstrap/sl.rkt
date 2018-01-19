@@ -38,6 +38,7 @@ Anti-Goal: integration with Racket ecosystem
          ; primitives for dealing with strings
          explode
          implode
+         string?
 
          ;;
          )
