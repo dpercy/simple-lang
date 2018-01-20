@@ -250,11 +250,6 @@
 ; TODO validate ...
 
 
-
-; desugar match??
-; translate each pattern to an expression that returns (false) or a list
-
-
 ; translate to JS ...
 
 (def (gen-program stmts)
@@ -277,18 +272,33 @@
                                  "function "
                                  (emit-name name)
                                  "("
-                                 (commas params)
+                                 (commas (map emit-name params))
                                  ") { return "
                                  (gen-expr body)
                                  "; }\n"))]
 
-    [(DefStruct name params) (string-append*
-                              (list
-                               "// TODO struct "
-                               name
-                               (commas params)))]
-    ;[(DefStruct name params) (error "TODO structs")]
-    ))
+    [(DefStruct name params)
+     (match (map emit-name (cons name params))
+       [(cons name params)
+        (string-append*
+         (list
+          "function " name "(" (commas params) ") {\n"
+          "  if (!(this instanceof " name ")) return new " name "(" (commas params) ");\n"
+          (emit-constructor-body params 0)
+          "}\n"))])]))
+
+(def (emit-constructor-body params idx)
+  (match params
+    [(empty) ""]
+    [(cons p params)
+     (string-append*
+      (list
+       "  this["
+       (natural->string idx)
+       "] = "
+       p
+       ";\n"
+       (emit-constructor-body params (+ idx 1))))]))
 
 (def (gen-expr expr)
   ; generate a JS expr, as a string
