@@ -1,4 +1,4 @@
-
+; racket test-boot.rkt < peanofib.sl > pf.mjs && node --experimental-modules pf.mjs
 
 (struct (Zero))
 (struct (Succ n))
@@ -21,3 +21,4 @@
 (fib (Succ (Succ (Succ (Succ (Zero))))))
 (fib (Succ (Succ (Succ (Succ (Succ (Zero)))))))
 (fib (Succ (Succ (Succ (Succ (Succ (Succ (Zero))))))))
+"yay"

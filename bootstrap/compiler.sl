@@ -254,7 +254,10 @@
 
 (def (gen-program stmts)
   ; generate a sequence of JS statements, as one string
-  (string-append* (map gen-stmt stmts)))
+  (string-append*
+   (cons
+    "import util from 'util';\n"
+    (map gen-stmt stmts))))
 
 (def (gen-stmt stmt)
   ; generate a JS statement, as a string
@@ -262,17 +265,17 @@
     [(ToplevelExpr e)
      ; use util.inspect to print full object tree
      ; https://stackoverflow.com/a/10729284/427397
-     (string-append* (list "console.log(require('util').inspect(" (gen-expr e) ", false, null));\n"))]
+     (string-append* (list "console.log(util.inspect(" (gen-expr e) ", false, null));\n"))]
     [(DefVal name e) (string-append*
                       (list
-                       "const "
+                       "export const "
                        (emit-name name)
                        " = "
                        (gen-expr e)
                        ";\n"))]
     [(DefFun name params body) (string-append*
                                 (list
-                                 "function "
+                                 "export function "
                                  (emit-name name)
                                  "("
                                  (commas (map emit-name params))
@@ -285,7 +288,7 @@
        [(cons name params)
         (string-append*
          (list
-          "function " name "(" (commas params) ") {\n"
+          "export function " name "(" (commas params) ") {\n"
           "  if (!(this instanceof " name ")) return new " name "(" (commas params) ");\n"
           (emit-constructor-body params 0)
           "}\n"))])]))
