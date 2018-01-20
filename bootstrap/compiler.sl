@@ -259,7 +259,10 @@
 (def (gen-stmt stmt)
   ; generate a JS statement, as a string
   (match stmt
-    [(ToplevelExpr e) (string-append (gen-expr e) ";\n")]
+    [(ToplevelExpr e)
+     ; use util.inspect to print full object tree
+     ; https://stackoverflow.com/a/10729284/427397
+     (string-append* (list "console.log(require('util').inspect(" (gen-expr e) ", false, null));\n"))]
     [(DefVal name e) (string-append*
                       (list
                        "const "
@@ -308,13 +311,59 @@
     [(Error msg) (emit-error msg)]
     [(Call func args) (emit-call (gen-expr func)
                                  (map gen-expr args))]
-    [(Match test
-            (list
-             (Case (PatCtor "true" (empty)) consq)
-             (Case (PatCtor "false" (empty)) alt)))
-     (emit-if (gen-expr test)
-              (gen-expr consq)
-              (gen-expr alt))]))
+    [(Match scrut cases)
+     (string-append*
+      (list
+       "( (() => {\n"
+       "const $scrut = " (gen-expr scrut) ";\n"
+       (string-append* (map gen-case cases))
+
+       (gen-expr (Error "match: no case matched")) ";\n"
+
+       "})() );\n"))]))
+
+(def (gen-case case)
+  (match case
+    [(Case pat expr)
+     (string-append*
+      (list
+       ; The whole case is wrapped in a do{}while(0),
+       ; so whenever a pattern fails you can use `break` to jump to the next case.
+       "do {\n"
+       (gen-pat "$scrut" pat)
+       "return " (gen-expr expr) ";\n"
+       "} while(0);\n"
+       ))]))
+
+(def (gen-pat scrut pat)
+  (match pat
+    [(PatHole name)
+     (string-append*
+      (list
+       "const " (emit-name name) " = " scrut ";\n"
+       ;;
+       ))]
+    [(PatLitr v)
+     (string-append*
+      (list
+       "if (" scrut " !== " (emit-quoted-constant v) ") break;\n"
+       ;;
+       ))]
+    [(PatCtor cname args)
+     (string-append*
+      (list
+       "if (!(" scrut " instanceof " (emit-name cname) ")) break;\n"
+       (gen-pat-args scrut 0 args)
+       ;;
+       ))]))
+
+(def (gen-pat-args scrut idx pats)
+  (match pats
+    [(empty) ""]
+    [(cons pat pats)
+     (string-append
+      (gen-pat (string-append* (list scrut "[" (natural->string idx) "]")) pat)
+      (gen-pat-args scrut (+ 1 idx) pats))]))
 
 (def (emit-quoted-constant v)
   (match (string? v)
@@ -336,11 +385,10 @@
 (def (emit-call func args)
   ; func and args are already JS expressions (strings).
   (string-append*
-   (list "((1,"
-         func
-         ")("
+   (list func
+         "("
          (commas args)
-         "))")))
+         ")")))
 
 (def (commas strings)
   (match strings
@@ -355,9 +403,6 @@
 (def (emit-error msg)
   (string-append*
    (list "( (() => { throw " (emit-quoted-string msg) "; })() )")))
-
-(def (emit-if test consq alt)
-  (string-append* (list "(" test "?" consq ":" alt ")")))
 
 
 
