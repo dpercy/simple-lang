@@ -5,6 +5,6 @@
 
 (module+ main
 
-  (write-string (compile-program (port->string)))
+  (void (write-string (compile-program (port->string))))
 
   )
