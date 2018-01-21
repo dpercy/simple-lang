@@ -342,7 +342,7 @@
 
        (gen-expr (Error "match: no case matched")) ";\n"
 
-       "})() );\n"))]))
+       "})() )"))]))
 
 (def (gen-case case)
   (match case
