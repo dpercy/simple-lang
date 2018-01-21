@@ -22,11 +22,9 @@ Anti-Goal: integration with Racket ecosystem
                      [sl:error error]
                      [sl:#%datum #%datum])
 
-         ; TODO figure out how modules should actually work.
-         ; For now, provide textual include,
-         ; so SL programs can be broken up without accidentally
-         ; depending on Racket libraries.
-         include
+         ; TODO figure out how to make this more portable?
+         ;  don't want to accidentally depend on Racket libraries.
+         (rename-out [require import])
 
          ; efficient special cases for certain constructors
          (rename-out [sl:true true]
@@ -40,6 +38,7 @@ Anti-Goal: integration with Racket ecosystem
          explode
          implode
          string?
+         string=?
 
          ;;
          )

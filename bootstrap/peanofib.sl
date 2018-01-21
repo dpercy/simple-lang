@@ -1,4 +1,4 @@
-; racket test-boot.rkt < peanofib.sl > pf.mjs && node --experimental-modules pf.mjs
+#lang s-exp "sl.rkt"
 
 (struct (Zero))
 (struct (Succ n))

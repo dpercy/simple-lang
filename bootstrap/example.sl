@@ -1,6 +1,6 @@
 #lang s-exp "sl.rkt"
 
-(include "nat.sl")
+(import "nat.sl")
 
 (+ (S (S (Z))) (S (S (S (Z)))))
 

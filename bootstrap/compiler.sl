@@ -1,6 +1,9 @@
 #lang s-exp "sl.rkt"
 
-(include "prelude.sl")
+(import "natural.sl")
+(import "bool.sl")
+(import "list.sl")
+(import "string.sl")
 
 
 ; statements
@@ -8,6 +11,7 @@
 (struct (DefFun name params body))
 (struct (DefStruct name params))
 (struct (ToplevelExpr expr))
+(struct (Import modname))
 
 ; expressions
 (struct (Quote val))
@@ -218,6 +222,7 @@
     [(list "def" (cons name params) body) (DefFun name params (parse-expr body))]
     [(list "def" name expr) (DefVal name (parse-expr expr))]
     [(list "struct" (cons name params)) (DefStruct name params)]
+    [(list "import" (SelfQuoting modname)) (Import modname)]
     [sexpr (ToplevelExpr (parse-expr sexpr))]))
 
 (def (parse-expr sexpr)
@@ -285,7 +290,21 @@
           "export function " name "(" (commas params) ") {\n"
           "  if (!(this instanceof " name ")) return new " name "(" (commas params) ");\n"
           (emit-constructor-body params 0)
-          "}\n"))])]))
+          "}\n"))])]
+    [(Import modname)
+     (string-append*
+      (list "import * from " (emit-quoted-string (replace-suffix modname ".sl" ".js")) ";\n"))]))
+
+(def (replace-suffix s old new)
+  (match (- (string-length s) (string-length old))
+    [baselen
+     (match (substring* s (- (string-length s) (string-length old)))
+       [old-suffix
+        (match (string=? old-suffix old)
+          [(false) (error "wrong suffix")]
+          [(true)
+           (string-append (substring s 0 baselen)
+                          new)])])]))
 
 (def (emit-constructor-body params idx)
   (match params

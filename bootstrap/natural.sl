@@ -1,4 +1,6 @@
+#lang s-exp "sl.rkt"
 
+(import "bool.sl")
 
 ; built-in:
 ; (struct (Z))
