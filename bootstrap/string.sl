@@ -1,6 +1,6 @@
 #lang s-exp "sl.rkt"
 
-(import "natural.sl")
+(import "int.sl")
 (import "list.sl")
 (import "bool.sl")
 

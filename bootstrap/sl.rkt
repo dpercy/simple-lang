@@ -12,29 +12,42 @@ Anti-Goal: integration with Racket ecosystem
 |#
 
 (require racket/provide)
+(require racket/splicing)
+(require racket/fixnum)
 
 (provide #%module-begin
          #%app
-         match
          #%top-interaction
          (rename-out [sl:struct struct]
                      [sl:def def]
                      [sl:error error]
-                     [sl:#%datum #%datum])
+                     [sl:#%datum #%datum]
+                     [sl:match match]
+                     ; syntax sugar for repeated cons and empty constructors
+                     [sl:list list])
 
          ; TODO figure out how to make this more portable?
          ;  don't want to accidentally depend on Racket libraries.
          (rename-out [require import])
 
-         ; efficient special cases for certain constructors
-         (rename-out [sl:true true]
-                     [sl:false false]
-                     [sl:empty empty]
-                     [sl:cons cons]
-                     [sl:list list]
-                     [sl:Z Z]
-                     [sl:S S])
-         ; primitives for dealing with strings
+         ; primitives for dealing with booleans.
+         boolean?
+
+         ; primitives for dealing with integers.
+         ; these all fail if the result is not a fixnum.
+         ; TODO what if different platforms have different fixnum sizes?
+         ;   - then a cross-compiler might constant-fold incorrectly
+         (rename-out [fixnum? int?]
+                     [fx+ +]
+                     [fx- -]
+                     [fx* *]
+                     [fxquotient /]
+                     [fx< <]
+                     [fx= =])
+
+         ; primitives for dealing with strings:
+         ; note these all depend on ints and booleans,
+         ; but not lists.
          string?
          string=?
          string-append
@@ -49,7 +62,9 @@ Anti-Goal: integration with Racket ecosystem
          )
 
 (define-syntax-rule (sl:struct (cname args ...))
-  (struct cname (args ...) #:prefab))
+  (begin
+    (provide cname)
+    (struct cname (args ...) #:prefab)))
 
 (define-syntax sl:def
   (syntax-rules ()
@@ -67,35 +82,35 @@ Anti-Goal: integration with Racket ecosystem
 (define-syntax (sl:#%datum stx)
   (syntax-case stx ()
     [(_ . v) (string? (syntax-e #'v)) #'(quote v)]
-    [(_ . i) (exact-nonnegative-integer? (syntax-e #'i)) #'(quote i)]))
+    [(_ . i) (exact-nonnegative-integer? (syntax-e #'i)) #'(quote i)]
+    [(_ . b) (boolean? (syntax-e #'b)) #'(quote b)]))
 
 
-; smart constructors for "built-in" (but still struct-y) data types
-; - booleans
-(define-match-expander sl:true
-  (syntax-rules () [(_) #true])
-  (syntax-rules () [(_) #true]))
-(define-match-expander sl:false
-  (syntax-rules () [(_) #false])
-  (syntax-rules () [(_) #false]))
-; - lists
-(define-match-expander sl:empty
-  (syntax-rules () [(_) '()])
-  (syntax-rules () [(_) '()]))
-(define-match-expander sl:cons
-  (syntax-rules () [(_ x xs) (list* x xs)])
-  (syntax-rules () [(_ x xs) (list* x xs)]))
-(define-match-expander sl:list
-  (syntax-rules () [(_ args ...) (list args ...)])
-  (syntax-rules () [(_ args ...) (list args ...)]))
-; - nats
-(define-match-expander sl:Z
-  (syntax-rules () [(_) 0])
-  (syntax-rules () [(_) 0]))
-(define-match-expander sl:S
-  (syntax-rules () [(_ n) (? exact-positive-integer?
-                             (app sub1 n))])
-  (syntax-rules () [(_ n) (add1 n)]))
+; Racket's match has special cases for certain identifiers,
+; like empty, cons, list... and others, such that
+; even if a prefab struct is defined, it will prefer the
+; built-in definitions of empty, cons, list.
+; So to get around this, we can insert a wrapper such that
+; (wrap (cons x xs)) means (struct cons (x xs)).
+(define-syntax-rule (sl:match scrut [pat expr] ...)
+  (match scrut
+    [(sl:pat pat) expr] ...))
+
+(define-match-expander sl:pat
+  (syntax-rules (sl:list)
+    [(_ (sl:list args ...))   (sl:list (sl:pat args) ...)]
+    [(_ (cname args ...))  (struct cname [(sl:pat args) ...])]
+    [(_ pat) pat]))
+
+(splicing-local [(struct empty () #:prefab)
+                 (struct cons (head tail) #:prefab)]
+  (define-match-expander sl:list
+    (syntax-rules ()
+      [(_)  (struct empty ())]
+      [(_ x xs ...) (struct cons [x (sl:list xs ...)])])
+    (syntax-rules ()
+      [(_)  (empty)]
+      [(_ x xs ...) (cons x (sl:list xs ...))])))
 
 (define (ord s)
   (match (string->list s)

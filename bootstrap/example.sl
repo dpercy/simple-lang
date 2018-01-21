@@ -1,18 +1,14 @@
 #lang s-exp "sl.rkt"
 
-(import "nat.sl")
-
-(+ (S (S (Z))) (S (S (S (Z)))))
-
+(import "int.sl")
 
 (def (fib n)
-  (match n
-    [(Z) n]
-    [(S (Z)) n]
-    [somethingelse (+ (fib (pred n)) (fib (pred (pred n))))]))
+  (match (< n 2)
+    [#true n]
+    [#false (+ (fib (- n 1)) (fib (- n 2)))]))
 
-(fib (Z))
-(fib (S (S (S (Z)))))
+(fib 0)
+(fib 3)
 
-(def x (fib (Z)))
-(def y (fib (S (S (S (Z))))))
+(def x (fib 0))
+(def y (fib 3))

@@ -1,6 +1,6 @@
 #lang s-exp "sl.rkt"
 
-(import "natural.sl")
+(import "int.sl")
 (import "bool.sl")
 (import "list.sl")
 (import "string.sl")
@@ -64,12 +64,12 @@
        ["[" (read-list "]" (substring* s 1))]
        [c
         (match (symbol-char? c)
-          [(true) (read-symbol-or-natural s)]
-          [(false)
+          [#true (read-symbol-or-int s)]
+          [#false
            (match (= (ord c) (ord "\""))
-             [(true) (match (read-string (substring* s 1))
-                       [(VS t s) (VS (SelfQuoting t) s)])]
-             [(false)
+             [#true (match (read-string (substring* s 1))
+                      [(VS t s) (VS (SelfQuoting t) s)])]
+             [#false
               (error "read: weird character")])])])]))
 
 (def (drop-whitespace s)
@@ -80,8 +80,8 @@
        [";" (drop-whitespace (drop-comment s))]
        [c
         (match (whitespace? c)
-          [(true) (drop-whitespace (substring* s 1))]
-          [(false) s])])]))
+          [#true (drop-whitespace (substring* s 1))]
+          [#false s])])]))
 
 (def (drop-comment s)
   (match s
@@ -94,9 +94,9 @@
 (def (read-list end s)
   (match (drop-whitespace s)
     [s (match (= (ord end) (ord (substring s 0 1)))
-         [(true) (VS (empty)
-                     (substring* s 1))]
-         [(false)
+         [#true (VS (empty)
+                    (substring* s 1))]
+         [#false
           (match (read s)
             [(VS head s)
              (match (read-list end s)
@@ -123,7 +123,7 @@
          [(VS t s) (VS (string-append c t) s)])]))
 
 
-(def (read-symbol-or-natural s)
+(def (read-symbol-or-int s)
   (match (read-token s)
     [(VS t s) (VS (convert-token t) s)]))
 
@@ -134,25 +134,31 @@
      (match (substring s 0 1)
        [c
         (match (symbol-char? c)
-          [(false) (VS "" s)]
-          [(true) (match (read-token (substring* s 1))
-                    [(VS t s)
-                     (VS (string-append c t)
-                         s)])])])]))
+          [#false (VS "" s)]
+          [#true (match (read-token (substring* s 1))
+                   [(VS t s)
+                    (VS (string-append c t)
+                        s)])])])]))
 
 (def (convert-token t)
   (match (andmap digit? (string-chars t))
-    [(true) (SelfQuoting (string->natural t))]
-    [(false) t]))
+    [#true (SelfQuoting (string->int t))]
+    [#false
+     (match t
+       ["#true" (SelfQuoting #true)]
+       ["#t" (SelfQuoting #true)]
+       ["#false" (SelfQuoting #false)]
+       ["#f" (SelfQuoting #false)]
+       [t t])]))
 
 
 
-(def (string->natural s)
-  (rev-digits->natural (map digit-value (reverse (string-chars s)))))
+(def (string->int s)
+  (rev-digits->int (map digit-value (reverse (string-chars s)))))
 
-(def (natural->string n)
-  (match (string-append* (reverse (natural->rev-digits n)))
-    ; An "empty natural literal" isn't a thing,
+(def (int->string n)
+  (match (string-append* (reverse (int->rev-digits n)))
+    ; An "empty int literal" isn't a thing,
     ; so replace it with zero.
     ["" "0"]
     [s s]))
@@ -163,19 +169,19 @@
 (def (digit val)
   (chr (+ val (ord "0"))))
 
-(def (rev-digits->natural revdigits)
+(def (rev-digits->int revdigits)
   (match revdigits
     [(empty) 0]
     [(cons lowdigit higherdigits)
-     (+ (* 10 (rev-digits->natural higherdigits))
+     (+ (* 10 (rev-digits->int higherdigits))
         lowdigit)]))
 
-(def (natural->rev-digits n)
+(def (int->rev-digits n)
   (match n
-    [(Z) (empty)]
+    [0 (empty)]
     [n
      (cons (digit (mod n 10))
-           (natural->rev-digits (div n 10)))]))
+           (int->rev-digits (/ n 10)))]))
 
 (def (symbol-char? c)
   (and3 (graphical? c)
@@ -227,8 +233,8 @@
 
 (def (parse-expr sexpr)
   (match (string? sexpr)
-    [(true)  (Var sexpr)]
-    [(false)
+    [#true  (Var sexpr)]
+    [#false
      (match sexpr
        [(SelfQuoting v)  (Quote v)]
        [(list "error" (SelfQuoting msg))  (Error msg)]
@@ -244,8 +250,8 @@
 
 (def (parse-pat sexpr)
   (match (string? sexpr)
-    [(true)  (PatHole sexpr)]
-    [(false)
+    [#true  (PatHole sexpr)]
+    [#false
      (match sexpr
        [(SelfQuoting v)  (PatLitr v)]
        [(cons cname args) (PatCtor cname (map parse-pat args))])]))
@@ -301,8 +307,8 @@
      (match (substring* s (- (string-length s) (string-length old)))
        [old-suffix
         (match (string=? old-suffix old)
-          [(false) (error "wrong suffix")]
-          [(true)
+          [#false (error "wrong suffix")]
+          [#true
            (string-append (substring s 0 baselen)
                           new)])])]))
 
@@ -313,7 +319,7 @@
      (string-append*
       (list
        "  this["
-       (natural->string idx)
+       (int->string idx)
        "] = "
        p
        ";\n"
@@ -378,15 +384,18 @@
     [(empty) ""]
     [(cons pat pats)
      (string-append
-      (gen-pat (string-append* (list scrut "[" (natural->string idx) "]")) pat)
+      (gen-pat (string-append* (list scrut "[" (int->string idx) "]")) pat)
       (gen-pat-args scrut (+ 1 idx) pats))]))
 
 (def (emit-quoted-constant v)
   (match (string? v)
-    [(true) (emit-quoted-string v)]
-    [(false)
-     (match (natural? v)
-       [(true) (emit-natural v)])]))
+    [#true (emit-quoted-string v)]
+    [#false
+     (match (int? v)
+       [#true (emit-int v)]
+       [#false
+        (match (boolean? v)
+          [#true (emit-bool v)])])]))
 
 (def (emit-quoted-string s)
   ; emit a JS expression that evaluates to the same string as s.
@@ -404,10 +413,15 @@
     ["\\" "\\\\"]
     [c c]))
 
-(def (emit-natural v)
+(def (emit-int v)
   ; represent nats as JS numbers.
   ; it's fine if they don't get too big.
-  (natural->string v))
+  (int->string v))
+
+(def (emit-bool b)
+  (match b
+    [#true "true"]
+    [#false "false"]))
 
 (def (emit-call func args)
   ; func and args are already JS expressions (strings).
@@ -436,9 +450,9 @@
     ["-" "_"]
     [c
      (match (alphanumeric? c)
-       [(true) c]
-       [(false)
-        (string-append* (list "$" (natural->string (ord c)) "$"))])]))
+       [#true c]
+       [#false
+        (string-append* (list "$" (int->string (ord c)) "$"))])]))
 
 (def (emit-error msg)
   (string-append*
@@ -448,7 +462,7 @@
 
 ;(gen-expr (parse-expr (read-one "  (add 2 3)  ")))
 ;(gen-expr (parse-expr (read-one "  (error \"ouch\")  ")))
-;(gen-expr (parse-expr (read-one "  (match (f x) [(true) ok] [(false) bad])")))
+;(gen-expr (parse-expr (read-one "  (match (f x) [#true ok] [#false bad])")))
 
 ;(gen-program (parse-program (read-all "(def x 1) (def y 2) (add x y) (def (add x y) (plus x y))")))
 
