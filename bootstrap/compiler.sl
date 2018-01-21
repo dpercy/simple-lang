@@ -253,18 +253,13 @@
 
 (def (gen-program stmts)
   ; generate a sequence of JS statements, as one string
-  (string-append*
-   (cons
-    "import util from 'util';\n"
-    (map gen-stmt stmts))))
+  (string-append* (map gen-stmt stmts)))
 
 (def (gen-stmt stmt)
   ; generate a JS statement, as a string
   (match stmt
     [(ToplevelExpr e)
-     ; use util.inspect to print full object tree
-     ; https://stackoverflow.com/a/10729284/427397
-     (string-append* (list "console.log(util.inspect(" (gen-expr e) ", false, null));\n"))]
+     (string-append* (list "console.log(" (gen-expr e) ");\n"))]
     [(DefVal name e) (string-append*
                       (list
                        "export const "
