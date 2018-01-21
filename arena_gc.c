@@ -59,6 +59,13 @@ void *arena_alloc(struct arena *a, size_t bytes) {
     return result;
 }
 
+// An arena contains an address iff that address is in the bounds
+// of arena->data.
+int arena_contains(struct arena *a, void *address) {
+    return a->data <= (char*)address
+	&& (char*)address < a->end;
+}
+
 
 struct cell {
     struct cell *car;
@@ -72,17 +79,19 @@ struct cell *cons(struct arena *a, struct cell *car, struct cell *cdr) {
 }
 
 
+
+
+
 // note we have to return a new pointer, because the object moved into the new arena.
 struct cell *copy_collect(struct arena *dest, struct arena *source, struct cell *root) {
-    // base case: the object is actually an immediate value
+    // base case: the object is actually an immediate value.
+    // there could be other immediate values besides NULL if you use tagged pointers.
     if (!root) {
 	return root;
-
-	// TODO there should be another case:
-	// if root is
-	//  - already in dest arena
-	//  - already in some ancestor of dest arena
-	// then we don't want to copy it again.
+    } else if (!arena_contains(source, root)) {
+	// If the object we're trying to move is already not in the source arena,
+	// then don't move it.
+	return root;
     } else {
 	// inductive case: recur on the children, then do the root
 	struct cell *new_car = copy_collect(dest, source, root->car);
