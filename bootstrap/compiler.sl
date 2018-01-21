@@ -405,7 +405,6 @@
     [(cons x xs) (string-append* (list x ", " (commas xs)))]))
 
 (def (emit-name name)
-  ; TODO safer escaping
   ; 1. prefix all generated names with $. this ensures:
   ;   - no generated name starts with a digit
   ;   - no generated name collides with a keyword
