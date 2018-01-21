@@ -35,10 +35,15 @@ Anti-Goal: integration with Racket ecosystem
                      [sl:Z Z]
                      [sl:S S])
          ; primitives for dealing with strings
-         explode
-         implode
          string?
          string=?
+         string-append
+         string-length
+         (rename-out [sl:substring substring])
+         ord
+         chr
+
+
 
          ;;
          )
@@ -92,7 +97,11 @@ Anti-Goal: integration with Racket ecosystem
                              (app sub1 n))])
   (syntax-rules () [(_ n) (add1 n)]))
 
-(define (explode str)
-  (map char->integer (string->list str)))
-(define (implode charcodes)
-  (list->string (map integer->char charcodes)))
+(define (ord s)
+  (match (string->list s)
+    [(list c) (char->integer c)]))
+(define (chr i)
+  (list->string (list (integer->char i))))
+
+(define (sl:substring s start end)
+  (substring s start end))

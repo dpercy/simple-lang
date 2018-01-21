@@ -7,35 +7,20 @@
 ; The two essential string primitives are explode and implode.
 ; These let you reuse nats and lists to specify strings.
 
-(def (string-length str)
-  (length (explode str)))
-
-(def (string-append x y)
-  (implode (append (explode x)
-                   (explode y))))
-
 (def (string-append* strings)
   (match strings
     [(empty) ""]
     [(cons s ss) (string-append s (string-append* ss))]))
 
 (def (string-chars s)
-  (map chr (explode s)))
-
-(def (substring s start end)
-  (implode (take (- end start)
-                 (drop start
-                       (explode s)))))
+  (match s
+    ["" (empty)]
+    [s (cons (substring s 0 1)
+             (string-chars (substring* s 1)))]))
 
 (def (substring* s start)
   (substring s start (string-length s)))
 
-(def (ord s)
-  (match (explode s)
-    [(cons i (empty)) i]))
-
-(def (chr i)
-  (implode (cons i (empty))))
 
 (def (char-in-range? c start end) ; inclusive
   (match (ord c)

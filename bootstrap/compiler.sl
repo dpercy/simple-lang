@@ -148,7 +148,7 @@
 
 
 (def (string->natural s)
-  (rev-digits->natural (map digit-value (reverse (explode s)))))
+  (rev-digits->natural (map digit-value (reverse (string-chars s)))))
 
 (def (natural->string n)
   (match (string-append* (reverse (natural->rev-digits n)))
@@ -158,7 +158,7 @@
     [s s]))
 
 (def (digit-value c)
-  (- c (ord "0")))
+  (- (ord c) (ord "0")))
 
 (def (digit val)
   (chr (+ val (ord "0"))))
