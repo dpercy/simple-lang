@@ -69,7 +69,6 @@
               (error "read: weird character")])])])]))
 
 (def (drop-whitespace s)
-  ; TODO handle comments
   (match s
     ["" ""]
     [s
@@ -103,7 +102,6 @@
 (def (read-string s)
   (match (substring s 0 1)
     ["\"" (VS "" (substring* s 1))]
-    ; TODO update emit-quoted-constant if we add escapes
     ["\\" (read-string/escape (substring* s 1))]
     ["\n" (error "multiline strings are not supported")]
     [c (match (read-string (substring* s 1))
@@ -111,6 +109,7 @@
 
 (def (read-string/escape s)
   (match (match (substring s 0 1)
+           ; keep me in sync with char-escape
            ["n" "\n"]
            ["t" "\t"]
            ["\"" "\""]
@@ -318,7 +317,7 @@
      (string-append*
       (list
        "( (() => {\n"
-       "const $scrut = " (gen-expr scrut) ";\n"
+       "const scrut = " (gen-expr scrut) ";\n"
        (string-append* (map gen-case cases))
 
        (gen-expr (Error "match: no case matched")) ";\n"
@@ -333,7 +332,7 @@
        ; The whole case is wrapped in a do{}while(0),
        ; so whenever a pattern fails you can use `break` to jump to the next case.
        "do {\n"
-       (gen-pat "$scrut" pat)
+       (gen-pat "scrut" pat)
        "return " (gen-expr expr) ";\n"
        "} while(0);\n"
        ))]))
@@ -378,7 +377,18 @@
 (def (emit-quoted-string s)
   ; emit a JS expression that evaluates to the same string as s.
   ; for now, escapes are not supported!
-  (string-append* (list "\"" s "\"")))
+  (string-append* (list "\""
+                        (string-append* (map char-escape (string-chars s)))
+                        "\"")))
+
+(def (char-escape c)
+  (match c
+    ; keep me in sync with read-string/escape
+    ["\n" "\\n"]
+    ["\t" "\\t"]
+    ["\"" "\\\""]
+    ["\\" "\\\\"]
+    [c c]))
 
 (def (emit-natural v)
   ; represent nats as JS numbers.
@@ -401,7 +411,7 @@
 
 (def (emit-name name)
   ; TODO safer escaping
-  (string-append* (filter alpha? (string-chars name))))
+  (string-append* (cons "$" (filter alpha? (string-chars name)))))
 
 (def (emit-error msg)
   (string-append*
