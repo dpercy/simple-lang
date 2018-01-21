@@ -411,7 +411,21 @@
 
 (def (emit-name name)
   ; TODO safer escaping
-  (string-append* (cons "$" (filter alpha? (string-chars name)))))
+  ; 1. prefix all generated names with $. this ensures:
+  ;   - no generated name starts with a digit
+  ;   - no generated name collides with a keyword
+  ;   - any name not starting with a $ is reserved for the compiler
+  ; 2. replace any non-alphanumeric character with an escape code
+  (string-append* (cons "$" (map identifier-char-escape (string-chars name)))))
+
+(def (identifier-char-escape c)
+  (match c
+    ["-" "_"]
+    [c
+     (match (alphanumeric? c)
+       [(true) c]
+       [(false)
+        (string-append* (list "$" (natural->string (ord c)) "$"))])]))
 
 (def (emit-error msg)
   (string-append*
