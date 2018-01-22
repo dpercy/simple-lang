@@ -240,6 +240,11 @@
        [(list "error" (SelfQuoting msg))  (Error msg)]
        [(cons "match" (cons scrutinee cases))  (Match (parse-expr scrutinee)
                                                       (map parse-case cases))]
+       ; syntax sugar for "list"
+       [(list "list")  (parse-expr (list "empty"))]
+       [(cons "list" (cons x xs))  (parse-expr (list "cons" x (cons "list" xs)))]
+
+       ; function call case must come last
        [(cons func args)  (Call (parse-expr func)
                                 (map parse-expr args))])]))
 
@@ -254,6 +259,11 @@
     [#false
      (match sexpr
        [(SelfQuoting v)  (PatLitr v)]
+
+       ; syntax sugar for "list"
+       [(list "list") (parse-pat (list "empty"))]
+       [(cons "list" (cons x xs)) (parse-pat (list "cons" x (cons "list" xs)))]
+
        [(cons cname args) (PatCtor cname (map parse-pat args))])]))
 
 
@@ -299,6 +309,12 @@
           "}\n"))])]
     [(Import modname)
      (string-append*
+      ; TODO this import syntax is invalid
+      ; - you can't import * like in Python
+      ; - you can `import * as foo`, which is like `foo = require(...)`.
+      ; - this means either:
+      ; .    - you must parse the imported library at compile time
+      ; .    - Scheme style (require _) is out!
       (list "import * from " (emit-quoted-string (replace-suffix modname ".sl" ".js")) ";\n"))]))
 
 (def (replace-suffix s old new)
