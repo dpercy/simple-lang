@@ -1,6 +1,5 @@
 #lang s-exp "sl.rkt"
 
-(import "int.sl")
 
 (struct (empty))
 (struct (cons first rest))

@@ -1,9 +1,29 @@
 #lang s-exp "sl.rkt"
 
-(import "int.sl")
-(import "bool.sl")
-(import "list.sl")
-(import "string.sl")
+(def mod int.mod)
+
+(def and3 bool.and3)
+(def not bool.not)
+(def or3 bool.or3)
+(def or4 bool.or4)
+(def or5 bool.or5)
+
+(def empty list.empty)
+(def cons list.cons)
+(def map list.map)
+(def andmap list.andmap)
+(def reverse list.reverse)
+
+; TODO design libraries for qualified use, like in Go:
+;  - not "string.string-append" but "string.append" or even "string.++"
+;  - not "string.substring" but "string.slice"
+(def substring* string.substring*)
+(def whitespace? string.whitespace?)
+(def digit? string.digit?)
+(def string-chars string.string-chars) ; explode?
+(def string-append* string.string-append*)
+(def graphical? string.graphical?)
+(def alphanumeric? string.alphanumeric?)
 
 
 ; statements
@@ -11,7 +31,6 @@
 (struct (DefFun name params body))
 (struct (DefStruct name params))
 (struct (ToplevelExpr expr))
-(struct (Import modname))
 
 ; expressions
 (struct (Quote val))
@@ -228,12 +247,11 @@
     [(list "def" (cons name params) body) (DefFun name params (parse-expr body))]
     [(list "def" name expr) (DefVal name (parse-expr expr))]
     [(list "struct" (cons name params)) (DefStruct name params)]
-    [(list "import" (SelfQuoting modname)) (Import modname)]
     [sexpr (ToplevelExpr (parse-expr sexpr))]))
 
 (def (parse-expr sexpr)
   (match (string? sexpr)
-    [#true  (Var sexpr)]
+    [#true  (parse-var sexpr)]
     [#false
      (match sexpr
        [(SelfQuoting v)  (Quote v)]
@@ -247,6 +265,11 @@
        ; function call case must come last
        [(cons func args)  (Call (parse-expr func)
                                 (map parse-expr args))])]))
+
+(def (parse-var str)
+  ; TODO parse a dot and make a qualified name
+  ; TODO then in codegen, lift imports from qualified names
+  (Var str))
 
 (def (parse-case sexpr)
   (match sexpr
@@ -306,16 +329,7 @@
           "export function " name "(" (commas params) ") {\n"
           "  if (!(this instanceof " name ")) return new " name "(" (commas params) ");\n"
           (emit-constructor-body params 0)
-          "}\n"))])]
-    [(Import modname)
-     (string-append*
-      ; TODO this import syntax is invalid
-      ; - you can't import * like in Python
-      ; - you can `import * as foo`, which is like `foo = require(...)`.
-      ; - this means either:
-      ; .    - you must parse the imported library at compile time
-      ; .    - Scheme style (require _) is out!
-      (list "import * from " (emit-quoted-string (replace-suffix modname ".sl" ".js")) ";\n"))]))
+          "}\n"))])]))
 
 (def (replace-suffix s old new)
   (match (- (string-length s) (string-length old))

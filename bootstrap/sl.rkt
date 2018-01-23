@@ -14,6 +14,9 @@ Anti-Goal: integration with Racket ecosystem
 (require racket/provide)
 (require racket/splicing)
 (require racket/fixnum)
+(require (only-in racket/syntax format-symbol))
+(require (for-syntax racket/match
+                     racket/string))
 
 (provide #%module-begin
          #%app
@@ -24,11 +27,9 @@ Anti-Goal: integration with Racket ecosystem
                      [sl:#%datum #%datum]
                      [sl:match match]
                      ; syntax sugar for repeated cons and empty constructors
-                     [sl:list list])
-
-         ; TODO figure out how to make this more portable?
-         ;  don't want to accidentally depend on Racket libraries.
-         (rename-out [require import])
+                     [sl:list list]
+                     ; global variable handler - for imports
+                     [sl:#%top #%top])
 
          ; primitives for dealing with booleans.
          boolean?
@@ -60,6 +61,20 @@ Anti-Goal: integration with Racket ecosystem
 
          ;;
          )
+
+(define-syntax (sl:#%top stx)
+  (syntax-case stx ()
+    [(_ . id) (identifier? #'id)
+
+     (match (string-split (symbol->string (syntax-e #'id))
+                          ".")
+       [(list unqualified)  #'(#%top . id)]
+       [(list prefix suffix) (with-syntax ([mod (string-append prefix ".sl")]
+                                           [suffix (string->symbol suffix)])
+                               #'(let ()
+                                   (local-require (only-in mod suffix))
+                                   suffix))]
+       [_ #'(#%top . id)])]))
 
 (define-syntax-rule (sl:struct (cname args ...))
   (begin
@@ -99,7 +114,10 @@ Anti-Goal: integration with Racket ecosystem
 (define-match-expander sl:pat
   (syntax-rules (sl:list)
     [(_ (sl:list args ...))   (sl:list (sl:pat args) ...)]
-    [(_ (cname args ...))  (struct cname [(sl:pat args) ...])]
+    [(_ (cname args ...))
+     (app struct->vector
+          (vector (== (format-symbol "struct:~a" (object-name cname)))
+                  (sl:pat args) ...))]
     [(_ pat) pat]))
 
 (splicing-local [(struct empty () #:prefab)

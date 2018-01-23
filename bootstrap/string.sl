@@ -1,8 +1,21 @@
 #lang s-exp "sl.rkt"
 
-(import "int.sl")
-(import "list.sl")
-(import "bool.sl")
+
+#|
+
+TODO this style of "import" is bad because it makes it look like
+string.sl is defining all these operations.
+or maybe I just need to be more explicit about exports?
+
+|#
+(def <= int.<=)
+
+(def and2 bool.and2)
+(def or2 bool.or2)
+(def not bool.not)
+
+(def empty list.empty)
+(def cons list.cons)
 
 ; The two essential string primitives are explode and implode.
 ; These let you reuse nats and lists to specify strings.

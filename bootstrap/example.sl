@@ -1,6 +1,5 @@
 #lang s-exp "sl.rkt"
 
-(import "int.sl")
 
 (def (fib n)
   (match (< n 2)
