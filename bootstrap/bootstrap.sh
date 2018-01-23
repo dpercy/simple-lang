@@ -24,5 +24,8 @@ do
 done
 wait
 
-diff $name.mjs ${name}2.mjs
+for name in ${modules[@]}
+do
+    diff $name.mjs ${name}2.mjs
+done
 echo 'yay!'
