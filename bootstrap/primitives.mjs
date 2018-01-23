@@ -70,34 +70,49 @@ export function $string_length(x) {
 }
 
 export function $substring(x, start, end) {
-    if (!($string$63$(x)))
+    if (!($string$63$(x))) {
+        console.error('not a string', x);
         throw "substring expect a string";
-    if (!($int$63$(x) && $int$63$(y)))
+    }
+    if (!($int$63$(start) && $int$63$(end))) {
+        console.error('start/end', start, end);
         throw "start and end must be integers";
-    if (!(0 <= start && start < x.length))
+    }
+    // start and end are *slice boundaries*,
+    // not indices,
+    // so they can be equal to x.length.
+    if (!(0 <= start && start <= x.length)) {
+        console.error('len', x.length, 'start', start);
         throw "start is out of range";
-    if (!(0 <= end && end < x.length))
+    }
+    if (!(0 <= end && end <= x.length)) {
+        console.error('len', x.length, 'end', end);
         throw "end is out of range";
-    if (!(start <= end))
+    }
+    if (!(start <= end)) {
+        console.error('start/end', start, end);
         throw "start/end are backwards";
+    }
     return x.slice(start, end);
 }
 
-export function $ord(i) {
+export function $ord(s) {
+    if (!($string$63$(s)))
+        throw "ord expects a string";
+    if (s.length !== 1)
+        throw "ord expects a single character";
+    return s.charCodeAt(0);
+}
+
+export function $chr(i) {
     // TODO make JS strings work by code points instead?
-    if (!($int$63$(i)))
-        throw "ord expects an integer";
+    if (!($int$63$(i))) {
+        console.error('ord', i);
+        throw "chr expects an integer";
+    }
     return String.fromCharCode(i);
 }
     
-export function $chr(s) {
-    if (!($string$63$(x)))
-        throw "chr expects a string";
-    if (x.length !== 1)
-        throw "chr expects a single character";
-    return x.charCodeAt(0);
-}
-
 export function $equal$63$(x, y) {
     // equal? works on bools, ints, strings, and structs.
     if (x === y) return true;
