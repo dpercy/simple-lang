@@ -29,7 +29,7 @@ Pure Functional Programming experiment:
 
 
     steps:
-    A: write a #lang for SL
+    A: (DONE, messily) write a #lang for SL
       - parse strictly - don't just allow any old Racket code
       - include #' for conveniently writing syntax
         - or not? write parser in object language too.
@@ -44,13 +44,19 @@ Pure Functional Programming experiment:
 
       - prims?
         - no. only structs.
+          - no, actually, that was very slow
+          - prims are not so complicated
+          - jets might have been more complicated than prims
 
-    B(A): write an SL to JS compiler in SL
+    B(A): (DONE, messily) write an SL to JS compiler in SL
       - include faithful errors?
 
     C(A): write an SL interpreter in SL
+      - maybe this should be the reference impl for error behaviors?
+      - could be a basis for debug mode
+      - could be a basis for partial evaluator
 
-    
+
 
 
 

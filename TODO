@@ -1,0 +1,92 @@
+
+DONE compiler.sl that can bootstrap itself to JS
+     (note: this leaves many, MANY code paths untested!
+      including EVERY code path that leads to an error!)
+
+
+TODO language test suite
+- defined as input / output / error text files
+- test runner should test both implementations: sl.rkt, and compiler.sl
+- should also test that compiler.sl-on-Racket and compiler.mjs match
+- unit tests should each focus on one aspect of one language form
+- squash portability bugs - int size limits - string unicode - arity errors
+
+
+TODO recreate the notebook UI
+- no websockets required any more - can do it all in JS
+- still need to avoid blocking the main thread - can use web workers
+- requires the compiler to handle reordering definitions?
+
+
+TODO debug mode
+- ?????
+- I want to kind of "zoom in" on a program trace
+  - NOT step forward one step at a time
+  - I want to *narrow in* starting from the top-level inputs and output
+  - so maybe I just want a tree of input/output examples
+    - each example lets you peek inside to see more examples
+- no need to cache the trace when you can recompute the parts you need
+- can use a kind of "shallow" interpreter that expands 1 function body,
+  then uses a fast eval for any function calls within that
+
+
+This would now make a great demo!
+- language is capable enough to solve "advent of code" type challenges
+- notebook UI makes the feedback loop very short; sometimes instant
+- static debug UI is handy and unusual
+- whole thing can be a static webpage on github!
+
+
+NEXT STEPS:
+- How can I make the system more capable?
+  - remember the goal is to make neat stuff like apps and games
+- to rephrase: what's lacking?
+
+TODO closures
+- how do you print them?
+- how do you explain (def (f x) e) vs (def f (\ x e)) ?
+  - remember defval and deffun have different scope and eval order
+
+TODO graphics
+- some primitives for describing drawings
+- the editor should render these to a canvas
+
+TODO shaders
+- I want to define a math/vector lib once and use it in shaders
+- maybe the compiler exposes hooks?
+      - you can define a custom interpretation, which runs at compile time
+      - then you can access it at run time
+  - is this less hacky than (magically-get-global #'foo) followed by (eval _) ?
+    - maybe it means functions' syntax doesn't have to exist at run-time
+    - because you don't want to make program transformations unsound!
+      it's weird if (map f lst) can peek into f's source code;
+      that must make some compiler optimization unsound...
+
+
+TODO abstract types
+- what if I want to hide the implementation of some data structure?
+- for example, maybe I made a Set type that has several ways
+  to represent the same logical set.
+- printing would need to be customizable
+- equality would need to be customizable
+- what if a type has no good external repr???
+
+TODO view patterns
+- if I want to keep my struct private,
+  can I still allow people to pattern match it?
+- for example, maybe lists are not backed by cons cells,
+  so cons is just a function, not a struct.
+  I still want to be able to "uncons".
+
+TODO imperative programming
+- you *can* actually do this manually, by creating a value like (Yield request continue-func)
+  which the runtime interprets by doing the IO and feeding the results back in.
+  - but that's cumbersome
+  - and slow
+- instead, how about "procedures"?
+  - distinct values from functions
+  - contain direct-style imperative code
+  - can be converted to (Yield req k) style and back,
+    so you can do fancy things like amb or JS promises
+  - can be "
+  
