@@ -57,7 +57,11 @@ Anti-Goal: integration with Racket ecosystem
          ord
          chr
 
-
+         ; fancy primitive for comparing *all*kinds*of*data*
+         ; TODO should equal? be primitive?
+         ; TODO should = and string=? be removed since we have equal?
+         ;    - they could be like equal? wrapped in a contract,
+         equal?
 
          ;;
          )

@@ -13,6 +13,7 @@
 (def map list.map)
 (def andmap list.andmap)
 (def reverse list.reverse)
+(def set-union list.set-union)
 
 ; TODO design libraries for qualified use, like in Go:
 ;  - not "string.string-append" but "string.append" or even "string.++"
@@ -34,6 +35,7 @@
 
 ; expressions
 (struct (Quote val))
+(struct (Global modname name))
 (struct (Var name))
 (struct (Error msg))
 (struct (Call func args))
@@ -45,7 +47,7 @@
 ; patterns - left-hand side of a case
 (struct (PatLitr name))
 (struct (PatHole name))
-(struct (PatCtor cname args))
+(struct (PatCtor ctor args))
 
 
 ; read ...
@@ -88,8 +90,8 @@
            (match (= (ord c) (ord "\""))
              [#true (match (read-string (substring* s 1))
                       [(VS t s) (VS (SelfQuoting t) s)])]
-             [#false
-              (error "read: weird character")])])])]))
+             ; hack for error reporting: (match c) complains about the value c
+             [#false (match c)])])])]))
 
 (def (drop-whitespace s)
   (match s
@@ -133,11 +135,13 @@
 (def (read-string/escape s)
   (match (match (substring s 0 1)
            ; keep me in sync with char-escape
+           ["r" "\r"]
            ["n" "\n"]
            ["t" "\t"]
            ["\"" "\""]
            ["\\" "\\"]
-           [c (error "unrecognized escape")])
+           ;[c (error "unrecognized escape")]
+           )
     [c (match (read-string (substring* s 1))
          [(VS t s) (VS (string-append c t) s)])]))
 
@@ -269,7 +273,10 @@
 (def (parse-var str)
   ; TODO parse a dot and make a qualified name
   ; TODO then in codegen, lift imports from qualified names
-  (Var str))
+  (match (string.string-split str ".")
+    [(list name) (Var name)]
+    [(list modname name) (Global modname name)]
+    [parts (error "identifier has too many dots")]))
 
 (def (parse-case sexpr)
   (match sexpr
@@ -287,7 +294,7 @@
        [(list "list") (parse-pat (list "empty"))]
        [(cons "list" (cons x xs)) (parse-pat (list "cons" x (cons "list" xs)))]
 
-       [(cons cname args) (PatCtor cname (map parse-pat args))])]))
+       [(cons ctor args) (PatCtor (parse-expr ctor) (map parse-pat args))])]))
 
 
 ; TODO validate ...
@@ -297,7 +304,46 @@
 
 (def (gen-program stmts)
   ; generate a sequence of JS statements, as one string
-  (string-append* (map gen-stmt stmts)))
+  (string-append (string-append* (map gen-import (find-imports stmts)))
+                 (string-append* (map gen-stmt stmts))))
+
+(def (gen-import modname)
+  (string-append*
+   (list
+    "import * as " (emit-name modname)
+    " from " (emit-quoted-string (string-append* (list "./" modname ".mjs")))
+    ";\n")))
+
+(def (find-imports form)
+  (match form
+
+    ; list of things
+    [(empty) (empty)]
+    [(cons form0 forms) (set-union (find-imports form0)
+                                   (find-imports forms))]
+
+    ; statements
+    [(DefVal name expr)  (find-imports expr)]
+    [(DefFun name params body)  (find-imports body)]
+    [(DefStruct name params)  (empty)]
+    [(ToplevelExpr expr)  (find-imports expr)]
+
+    ; expressions
+    [(Quote val)  (empty)]
+    [(Global modname name)  (list modname)]
+    [(Var name)  (empty)]
+    [(Error msg)  (empty)]
+    [(Call func args)  (find-imports (cons func args))]
+    [(Match scrut cases)  (find-imports (cons scrut cases))]
+
+    ; case - one arm of a match expression
+    [(Case pat expr)  (set-union (find-imports pat)
+                                 (find-imports expr))]
+
+    ; patterns - left-hand side of a case
+    [(PatLitr name)  (empty)]
+    [(PatHole name)  (empty)]
+    [(PatCtor ctor args)  (find-imports (cons ctor args))]))
 
 (def (gen-stmt stmt)
   ; generate a JS statement, as a string
@@ -360,6 +406,8 @@
   (match expr
     [(Quote v) (emit-quoted-constant v)]
     [(Var name) (emit-name name)]
+    [(Global mod name) (string-append*
+                        (list (emit-name mod) "." (emit-name name)))]
     [(Error msg) (emit-error msg)]
     [(Call func args) (emit-call (gen-expr func)
                                  (map gen-expr args))]
@@ -401,10 +449,14 @@
        "if (" scrut " !== " (emit-quoted-constant v) ") break;\n"
        ;;
        ))]
-    [(PatCtor cname args)
+    [(PatCtor ctor args)
+     ; TODO prevent PatHole from shadowing a PatCtor!
+     ; - instead, compile a pattern into 2 phases:
+     ;   1. a check phase: one big "&&" expression on "scrut[1][0][2]" paths
+     ;   2. a bind phase: sequence of "const x = ..." statements
      (string-append*
       (list
-       "if (!(" scrut " instanceof " (emit-name cname) ")) break;\n"
+       "if (!(" scrut " instanceof " (gen-expr ctor) ")) break;\n"
        (gen-pat-args scrut 0 args)
        ;;
        ))]))
@@ -437,6 +489,7 @@
 (def (char-escape c)
   (match c
     ; keep me in sync with read-string/escape
+    ["\r" "\\r"]
     ["\n" "\\n"]
     ["\t" "\\t"]
     ["\"" "\\\""]

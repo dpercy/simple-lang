@@ -1,13 +1,9 @@
 #lang s-exp "sl.rkt"
 
 
-#|
-
-TODO this style of "import" is bad because it makes it look like
-string.sl is defining all these operations.
-or maybe I just need to be more explicit about exports?
-
-|#
+; TODO this style of "import" is bad because it makes it look like
+; string.sl is defining all these operations.
+; or maybe I just need to be more explicit about exports?
 (def <= int.<=)
 
 (def and2 bool.and2)
@@ -33,6 +29,32 @@ or maybe I just need to be more explicit about exports?
 
 (def (substring* s start)
   (substring s start (string-length s)))
+
+
+(def (startswith? s prefix)
+  (match (<= (string-length prefix)
+             (string-length s))
+    ; the string must be at least as long as the prefix
+    [#false #false]
+    [#true
+     (string=? prefix
+               (substring s 0 (string-length prefix)))]))
+
+
+(def (string-split s sep)
+  (match (startswith? s sep)
+    [#true (cons "" (string-split (substring* s (string-length sep))
+                                  sep))]
+    [#false (match s
+              ; This is Python's take on string-split--
+              ; another option is to say (string-split "" _) == (empty),
+              ; but that seems to imply  (string-split "x," ",") == (list "x")
+              ; when (list "x" "") would make more sense.
+              ["" (list "")]
+              [s (match (string-split (substring* s 1) sep)
+                   [(cons x xs) (cons (string-append (substring s 0 1)
+                                                     x)
+                                      xs)])])]))
 
 
 (def (char-in-range? c start end) ; inclusive

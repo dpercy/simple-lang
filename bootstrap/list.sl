@@ -68,3 +68,21 @@
   (match lst
     [(empty) onto]
     [(cons x xs) (cons x (append xs onto))]))
+
+(def (contains? lst item)
+  (match lst
+    [(empty) #false]
+    [(cons x xs) (match (equal? item x)
+                   [#true #true]
+                   [#false (contains? xs item)])]))
+
+(def (set-add base item)
+  (match (contains? base item)
+    [#true base]
+    [#false (cons item base)]))
+
+(def (set-union base more)
+  (match more
+    [(empty) base]
+    [(cons x xs) (set-union (set-add base x)
+                            xs)]))
