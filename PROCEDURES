@@ -1,0 +1,63 @@
+
+How will this language express imperative ideas?
+It would be cool to separate "functions" and "procedures".
+
+"Functions" are pure: inputs -> output.  (or crash, or diverge...)
+
+"Procedures" yield side effects:  inputs -> Comp  where Comp = Done(output) | Yield request (response -> Comp).
+
+
+Functions can call procedures, but not vice versa.
+But maybe you can "wrap" a procedure to assert that it's actually pure??  like runST or runState
+
+
+Maybe use ! to indicate "imperativeness"?
+"bang call"
+f!(a, b)
+f(a, b)!
+f! a, b    # ambiguous like Ruby
+
+
+
+
+
+
+procedure runGreeter() {
+  print!(formGreeting(getName!()))
+}
+
+# is like this:
+runGreeter = do
+  name <- getName
+  let greeting = formGreeting name
+  print greeting
+
+
+# or another syntax:
+procedure runGreeter() {
+  do print(formGreeting(do getName()))
+}
+
+
+
+
+For testing or magic purposes,
+you can *inspect* a computation:
+
+inspect(runGreeter)   -- returns a value representing the computation performed by runGreeter!()
+
+comp = inspect(runGreeter)
+request = next(comp)   -- returns the getName request
+next(comp, "david")    -- plugs the response back into the computation and resumes it
+
+
+And so far none of this has mentioned "handlers".
+There are different ways of doing handlers and I'm not sure which one to use yet.
+
+
+
+
+
+
+
+

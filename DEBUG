@@ -1,0 +1,57 @@
+
+Debugging!
+
+
+I want to see the steps.
+But not all the steps!
+I want to see some steps, then poke, and then see more.
+
+
+I don't really want to pay for steps I don't see.
+I don't want to wait all day to build some huge trace,
+then do some complicated pruning.
+
+
+I don't want to rewrite the debugger for each platform.
+So can I implement debugging as a source-to-source transformation?
+(This is not a hack! It reminds me of Conal Eliott's CCC,
+ where he reinterprets a lambda as a lambda-with-derivative,
+ then reinterprets that as a graphviz graph.
+
+
+So what's the debugprogram of this?
+
+(debugprogram '(/ (+ 43 20) 100))   ?
+
+(run (debugprogram '(/ (+ 43 20) 100)))
+== (list '(/ (+ 43 20) 100)
+         '(/ 63 100)
+	  0.63)
+
+so
+
+(debugprogram ...)
+=== '(cons '(/ (+ 43 20) 100)
+           (let ([t0 (+ 43 20)])
+	     (cons `(/ ,t0 100)
+	           (let ([t1 (/ t0 100)])
+		     (cons t1
+		           (empty))))))
+
+This seems hard!
+This is basically a COMPILER from PROGRAM -> SELF-TRACING-PROGRAM.
+Maybe an interpreter would be easier.
+This is still portable if the interpreter is in simple-lang itself.
+
+
+(def (trace-eval prog)  ;  return a list of all intermediate expressions
+  (match prog
+    [(Quote v)  (lambda (globals) (list (Quote v)))]
+    [(Global name)  (lambda (globals) (glookup globals name))]
+    [(Call f (list x))
+
+    tef = (trace-eval f)
+
+    
+
+
