@@ -304,8 +304,38 @@
 
 (def (gen-program stmts)
   ; generate a sequence of JS statements, as one string
-  (string-append (string-append* (map gen-import (find-imports stmts)))
-                 (string-append* (map gen-stmt stmts))))
+  (string-append* (list
+                   (prelude)
+                   (string-append* (map gen-import (find-imports stmts)))
+                   (string-append* (map gen-stmt stmts)))))
+
+(def prelude-names
+  (list
+   "boolean?"
+   "int?"
+   "+"
+   "-"
+   "*"
+   "/"
+   "<"
+   "="
+   "string?"
+   "string=?"
+   "string-append"
+   "string-length"
+   "substring"
+   "ord"
+   "chr"
+   "equal?"
+   ;;
+   ))
+
+(def (prelude)
+  (string-append*
+   (list
+    "import { "
+    (commas (map emit-name prelude-names))
+    " } from \"./primitives.mjs\";\n")))
 
 (def (gen-import modname)
   (string-append*
