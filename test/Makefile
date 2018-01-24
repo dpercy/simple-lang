@@ -1,6 +1,8 @@
 DIFF = diff -U10
 COLORDIFF = $(shell which -a colordiff cat 2>/dev/null | head -n 1)
 
+NODE = node --experimental-modules --no-warnings
+
 TEST_PROGRAMS = $(wildcard *.sl)
 TEST_OUTPUTS = $(TEST_PROGRAMS:.sl=.out)
 TEST_DIFFS = $(TEST_PROGRAMS:.sl=.diff)
@@ -20,6 +22,11 @@ default: $(TEST_DIFFS)
 	$(DIFF) $*.out $*.node-out | $(COLORDIFF)
 
 
+%.out:
+	@printf >&2 '\033[31mYou need to implement %s\033[m\n' $@
+	@false
+
+
 # There are 2 ways to evaluate a .sl program:
 #  1. run it in Racket directly
 #  2. compile it using compiler.sl
@@ -30,11 +37,11 @@ default: $(TEST_DIFFS)
 
 .PRECIOUS: %.racket-out
 %.racket-out: %.sl
-	racket $< >$@
+	racket $*.sl >$*.racket-out
 
 .PRECIOUS: %.node-out
 %.node-out: build/%.mjs
-	node --experimental-modules --no-warnings $<  >$@
+	$(NODE) build/$*.mjs >$*.node-out
 
 # TODO there are undeclared dependencies on compiler.mjs...
 #   -  can solve by turning bootstrap.sh into a makefile
@@ -42,8 +49,8 @@ default: $(TEST_DIFFS)
 # To create a .mjs file,
 # you run the .sl file through both compilers and verify that they match.
 build/%.mjs: %.sl | build
-	racket ../bootstrap/test-boot.rkt <$<  >$@
-	node --experimental-modules --no-warnings ../bootstrap/bootstrap.mjs ../bootstrap/compiler.mjs <$<  >$@.bootstrapped
+	racket  ../bootstrap/test-boot.rkt <$*.sl  >build/$*.mjs
+	$(NODE) ../bootstrap/bootstrap.mjs <$*.sl  >build/$*.mjs.bootstrapped
 	$(DIFF) $@ $@.bootstrapped | $(COLORDIFF)
 
 # The build directory should exist and contain a link to primitives.mjs
