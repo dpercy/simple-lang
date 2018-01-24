@@ -36,7 +36,7 @@ default: $(TEST_DIFFS)
 # should produce identical .mjs files.
 
 .PRECIOUS: %.racket-out
-%.racket-out: %.sl
+%.racket-out: %.sl $(wildcard ../bootstrap/*.rkt)
 	racket $*.sl >$*.racket-out
 
 .PRECIOUS: %.node-out
@@ -48,7 +48,7 @@ default: $(TEST_DIFFS)
 
 # To create a .mjs file,
 # you run the .sl file through both compilers and verify that they match.
-build/%.mjs: %.sl | build
+build/%.mjs: %.sl $(wildcard ../bootstrap/*.rkt) ../bootstrap/compiler.mjs    | build
 	racket  ../bootstrap/test-boot.rkt <$*.sl  >build/$*.mjs
 	$(NODE) ../bootstrap/bootstrap.mjs <$*.sl  >build/$*.mjs.bootstrapped
 	$(DIFF) $@ $@.bootstrapped | $(COLORDIFF)
@@ -59,6 +59,12 @@ build:
 	cd $@ && ln -s ../../bootstrap/primitives.mjs
 
 
+.PHONY: ../bootstrap/compiler.mjs
+../bootstrap/compiler.mjs:
+	$(MAKE) -C ../bootstrap/
+
+
 .PHONY: clean
 clean:
 	rm -rf build *.racket-out *.node-out
+	$(MAKE) -C ../bootstrap/ clean
