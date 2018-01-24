@@ -11,11 +11,13 @@ TEST_DIFFS = $(TEST_PROGRAMS:.sl=.diff)
 .SECONDARY:
 
 
-
+# TODO fix interleaved output -
+#  - maybe safe each diff to a file, and report separately at the end.
 .PHONY: default
 default: $(TEST_DIFFS)
 
 
+# TODO try a better diff3 like "diffuse" ?
 .PHONY: %.diff
 %.diff: %.out %.racket-out %.node-out
 	$(DIFF) $*.out $*.racket-out | $(COLORDIFF)
