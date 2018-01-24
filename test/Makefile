@@ -1,40 +1,40 @@
 
 
-default: test/numbers
 
-# TODO convince make not to delete intermediate files...
+default: diff/numbers
 
-# build1 contains .mjs files compiled by Racket
-build1:
+
+diff/%: %.expected.out %.racket.out %.node.out
+	diff $*.expected.out $*.racket.out
+	diff $*.expected.out $*.node.out
+
+
+# There are 2 ways to evaluate a .sl program:
+#  1. run it in Racket directly
+#  2. compile it using compiler.sl
+#    2a. run compiler.sl in Racket directly
+#    2b. run the self-compiled version of compiler.sl
+# I'm calling this 2 ways rather than 3 because 2a and 2b
+# should produce identical .mjs files.
+
+
+%.racket.out: %.sl
+	racket $< >$@
+
+%.node.out: build/%.mjs
+	node --experimental-modules --no-warnings $<  >$@
+
+
+# To create a .mjs file,
+# you run the .sl file through both compilers and verify that they match.
+build/%.mjs: %.sl | build
+	@# compile through racket to create the target
+	racket ../bootstrap/test-boot.rkt <$<  >$@
+	@# compile through node as an integrity check
+	node --experimental-modules --no-warnings ../bootstrap/bootstrap.mjs ../bootstrap/compiler.mjs <$<  >$@.bootstrapped
+	diff $@ $@.bootstrapped
+
+# The build directory should exist and contain a link to primitives.mjs
+build:
 	mkdir $@
 	cd $@ && ln -s ../../bootstrap/primitives.mjs
-build1/%.mjs: %.sl | build1
-	racket ../bootstrap/test-boot.rkt < $< > $@
-
-# build2 contains .mjs files compiled by compiler.mjs
-build2:
-	mkdir $@
-	cd $@ && ln -s ../../bootstrap/primitives.mjs
-build2/%.mjs: %.sl | build2
-	node --experimental-modules ../bootstrap/bootstrap.mjs ../bootstrap/compiler.mjs < $< > $@
-
-# diff/%.mjs is a phony target representing that you should diff those two files
-# TODO do I need to mark this as phony?
-diff/%.mjs: build1/%.mjs build2/%.mjs
-	diff $^
-
-
-# to get the output of a .sl file,
-# you first compile it both ways and confirm they match,
-# then you run the compiled file (either one) in node.
-%.actual.out: build1/%.mjs build2/%.mjs diff/%.mjs
-	node --experimental-modules $< > $@
-
-# test/% is a phony target meaning: does this test pass?
-# TODO could make this a real file that gets aggregated into a report
-test/%: %.expected.out %.actual.out
-	diff $^
-
-.PHONY: clean
-clean:
-	rm -rf build1 build2 *.actual.out
