@@ -1,19 +1,23 @@
-
-
-
-default: diff/numbers
-
 DIFF = diff -U10
 COLORDIFF = $(shell which -a colordiff cat 2>/dev/null | head -n 1)
 
+TEST_PROGRAMS = $(wildcard *.sl)
+TEST_OUTPUTS = $(TEST_PROGRAMS:.sl=.out)
+TEST_DIFFS = $(TEST_PROGRAMS:.sl=.diff)
 
 # Don't automatically delete intermediate files.
 .SECONDARY:
 
 
-diff/%: %.expected.out %.racket.out %.node.out
-	$(DIFF) $*.expected.out $*.racket.out | $(COLORDIFF)
-	$(DIFF) $*.expected.out $*.node.out | $(COLORDIFF)
+
+.PHONY: default
+default: $(TEST_DIFFS)
+
+
+.PHONY: %.diff
+%.diff: %.out %.racket-out %.node-out
+	$(DIFF) $*.out $*.racket-out | $(COLORDIFF)
+	$(DIFF) $*.out $*.node-out | $(COLORDIFF)
 
 
 # There are 2 ways to evaluate a .sl program:
@@ -24,12 +28,12 @@ diff/%: %.expected.out %.racket.out %.node.out
 # I'm calling this 2 ways rather than 3 because 2a and 2b
 # should produce identical .mjs files.
 
-.PRECIOUS: %.racket.out
-%.racket.out: %.sl
+.PRECIOUS: %.racket-out
+%.racket-out: %.sl
 	racket $< >$@
 
-.PRECIOUS: %.node.out
-%.node.out: build/%.mjs
+.PRECIOUS: %.node-out
+%.node-out: build/%.mjs
 	node --experimental-modules --no-warnings $<  >$@
 
 # TODO there are undeclared dependencies on compiler.mjs...
@@ -46,3 +50,8 @@ build/%.mjs: %.sl | build
 build:
 	mkdir $@
 	cd $@ && ln -s ../../bootstrap/primitives.mjs
+
+
+.PHONY: clean
+clean:
+	rm -rf build *.racket-out *.node-out
