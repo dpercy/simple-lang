@@ -1,4 +1,4 @@
-#lang s-exp "sl.rkt"
+#lang s-exp "../bootstrap/sl.rkt"
 
 (struct (Zero))
 (struct (Succ n))
