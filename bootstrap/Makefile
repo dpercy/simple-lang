@@ -19,9 +19,10 @@ default: $(DIFFS)
 
 
 # The first compilation (.mjs) depends on:
-# - the source file
-# - Racket stuff
-%.mjs: %.sl $(wildcard *.rkt)
+# - the source file itself, as the input
+# - the Racket programs that eval compiler.sl
+# - compiler.sl, and its dependencies
+%.mjs: %.sl $(wildcard *.rkt) $(wildcard *.sl)
 	racket test-boot.rkt < $*.sl > $*.mjs
 
 
