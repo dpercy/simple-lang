@@ -11,8 +11,6 @@ TEST_DIFFS = $(TEST_PROGRAMS:.sl=.diff)
 .SECONDARY:
 
 
-# TODO fix interleaved output -
-#  - maybe safe each diff to a file, and report separately at the end.
 .PHONY: default
 default: $(TEST_DIFFS)
 
@@ -45,8 +43,6 @@ default: $(TEST_DIFFS)
 %.node-out: build/%.mjs
 	$(NODE) build/$*.mjs >$*.node-out
 
-# TODO there are undeclared dependencies on compiler.mjs...
-#   -  can solve by turning bootstrap.sh into a makefile
 
 # To create a .mjs file,
 # you run the .sl file through both compilers and verify that they match.
