@@ -18,10 +18,10 @@ Anti-Goal: integration with Racket ecosystem
 (require (for-syntax racket/match
                      racket/string))
 
-(provide #%module-begin
-         #%app
+(provide #%app
          #%top-interaction
-         (rename-out [sl:struct struct]
+         (rename-out [sl:#%module-begin #%module-begin]
+                     [sl:struct struct]
                      [sl:def def]
                      [sl:error error]
                      [sl:#%datum #%datum]
@@ -65,6 +65,26 @@ Anti-Goal: integration with Racket ecosystem
 
          ;;
          )
+
+(define (sl-print value port)
+  (match value
+    [(or (? string?)
+         (? boolean?)
+         (? number?))  (write value port)]
+    [(app struct->vector (vector _ args ...))
+     (begin
+       (write-string "(" port)
+       (write (object-name value) port)
+       (for ([a args])
+         (write-string " " port)
+         (sl-print a port))
+       (write-string ")" port))]))
+
+(define-syntax-rule (sl:#%module-begin forms ...)
+  (#%module-begin
+   (global-port-print-handler sl-print)
+   (print-boolean-long-form #true)
+   forms ...))
 
 (define-syntax (sl:#%top stx)
   (syntax-case stx ()
