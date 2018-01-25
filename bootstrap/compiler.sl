@@ -333,7 +333,7 @@
 (def (prelude)
   (string-append*
    (list
-    "import { "
+    "import { show, "
     (commas (map emit-name prelude-names))
     " } from \"./primitives.mjs\";\n")))
 
@@ -379,7 +379,7 @@
   ; generate a JS statement, as a string
   (match stmt
     [(ToplevelExpr e)
-     (string-append* (list "console.log(" (gen-expr e) ");\n"))]
+     (string-append* (list "console.log(show(" (gen-expr e) "));\n"))]
     [(DefVal name e) (string-append*
                       (list
                        "export const "
@@ -398,14 +398,15 @@
                                  "; }\n"))]
 
     [(DefStruct name params)
-     (match (map emit-name (cons name params))
-       [(cons name params)
+     (match (cons name (map emit-name (cons name params)))
+       [(cons orig-name (cons name params))
         (string-append*
          (list
           "export function " name "(" (commas params) ") {\n"
           "  if (!(this instanceof " name ")) return new " name "(" (commas params) ");\n"
           (emit-constructor-body params 0)
-          "}\n"))])]))
+          "}\n"
+          name ".schemeName = " (emit-quoted-string orig-name) ";\n"))])]))
 
 (def (replace-suffix s old new)
   (match (- (string-length s) (string-length old))

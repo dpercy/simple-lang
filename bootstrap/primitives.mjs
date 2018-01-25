@@ -1,4 +1,24 @@
 
+export function show(v) {
+    switch (typeof v) {
+    case 'boolean':
+        return v ? "#true" : "#false";
+    case 'string':
+    case 'number':
+        return JSON.stringify(v);
+    case 'object': {
+        let s = '(' + v.constructor.schemeName;
+        for (let i=0; i<v.constructor.length; ++i) {
+            s += ' ' + show(v[i]);
+        }
+        s += ')';
+        return s;
+    }
+        
+    default:
+        return v.toString();
+    }
+}
 
 export function $boolean$63$(v) { return typeof v === "boolean"; }
 export function $int$63$(v) { return Number.isInteger(v); }
