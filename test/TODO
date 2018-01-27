@@ -1,0 +1,71 @@
+TODO - PUT ON YOUR TESTING HAT :D
+
+
+What are the most valuable things to test?
+Things that I think don't work yet.
+Difficult things / edge cases.
+Things I think will be different from Racket to JS.
+
+
+TODO don't aim for parity:
+- sl.rkt is supposed to be quick and dirty; just enough to bootstrap.
+- DRY - don't implement everything twice! (printing, errors...)
+- remove the parity stuff from the test/Makefile
+
+TODO don't aim for parity, and don't rely on codgen pass for correctness:
+- keep the bootstrapping impl super super dumb:
+  just barely smart enough to execute one program
+  correctly on one input - the compiler.
+
+- keep the low-level language's semantics vague:
+  makes it easier to implement that final codegen pass
+
+- keep all the user-facing errors in a compiler pass:
+  - will work the same for any target
+  - will be visible to optimization passes
+
+steps:
+- check bootstrap/Makefile: is it testing too much?
+  - nope lgtm
+- remove Racket output from test/Makefile
+  
+- write the test plan
+- write the tests
+- pass the tests
+
+
+
+
+
+prims
+- printing
+- arity errors
+- type errors
+
+strings
+- arity of slicing
+- conflation of length-1-strings with chars
+- utf-16 vs true code points
+  - which code points are representable?
+  - length with emojii and stuff
+
+
+ints
+- size limits
+  - should it wrap? saturate? error?
+- negative numbers
+- division by zero
+- negative zero? try it in JS first
+
+
+imports?
+- ... test suite assumes 1 test = 1 file ...
+  - could just add another rule in Makefile for this one test.
+
+
+structs
+- constructor is a value
+- can rename a constructor and match using it
+- arity in, out
+- TODO
+
