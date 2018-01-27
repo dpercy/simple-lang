@@ -15,10 +15,8 @@ TEST_DIFFS = $(TEST_PROGRAMS:.sl=.diff)
 default: $(TEST_DIFFS)
 
 
-# TODO try a better diff3 like "diffuse" ?
 .PHONY: %.diff
-%.diff: %.out %.racket-out %.node-out
-	$(DIFF) $*.out $*.racket-out | $(COLORDIFF)
+%.diff: %.out %.node-out
 	$(DIFF) $*.out $*.node-out | $(COLORDIFF)
 
 
@@ -27,29 +25,29 @@ default: $(TEST_DIFFS)
 	@false
 
 
-# There are 2 ways to evaluate a .sl program:
-#  1. run it in Racket directly
-#  2. compile it using compiler.sl
-#    2a. run compiler.sl in Racket directly
-#    2b. run the self-compiled version of compiler.sl
-# I'm calling this 2 ways rather than 3 because 2a and 2b
-# should produce identical .mjs files.
-
-.PRECIOUS: %.racket-out
-%.racket-out: %.sl $(wildcard ../bootstrap/*.rkt)
-	racket $*.sl >$*.racket-out
 
 .PRECIOUS: %.node-out
-%.node-out: build/%.mjs
-	$(NODE) build/$*.mjs >$*.node-out
+%.node-out: build/%.mjs diff/%
+	$(NODE) $< >$@
 
 
-# To create a .mjs file,
-# you run the .sl file through both compilers and verify that they match.
-build/%.mjs: %.sl $(wildcard ../bootstrap/*.rkt) ../bootstrap/compiler.mjs    | build
-	racket  ../bootstrap/test-boot.rkt <$*.sl  >build/$*.mjs
-	$(NODE) ../bootstrap/bootstrap.mjs <$*.sl  >build/$*.mjs.bootstrapped
-	$(DIFF) $@ $@.bootstrapped | $(COLORDIFF)
+diff/%: build/%.mjs build/%.mjs.bootstrapped
+	$(DIFF) $^ | $(COLORDIFF)
+
+# One way to compile a .sl file is by running compiler.sl on Racket.
+# This depends on:
+# - the input .sl file
+# - the .rkt shims for running compiler.sl on Racket
+# - the compiler itself: a set of .sl files in bootstrap/
+build/%.mjs: %.sl $(wildcard ../bootstrap/*.rkt) $(wildcard ../boostrap/*.sl) | build
+	racket  ../bootstrap/test-boot.rkt <$<  >$@
+
+# Another way is to run compiler.mjs in node.
+# This depends on:
+# - the input .sl file
+# - the compiler itself (a phony target with its own makefile)
+build/%.mjs.bootstrapped: %.sl ../bootstrap/compiler.mjs | build
+	$(NODE) ../bootstrap/bootstrap.mjs <$<  >$@
 
 # The build directory should exist and contain a link to primitives.mjs
 build:
@@ -57,12 +55,11 @@ build:
 	cd $@ && ln -s ../../bootstrap/primitives.mjs
 
 
-.PHONY: ../bootstrap/compiler.mjs
 ../bootstrap/compiler.mjs:
 	$(MAKE) -C ../bootstrap/
 
 
 .PHONY: clean
 clean:
-	rm -rf build *.racket-out *.node-out
+	rm -rf build *.node-out
 	$(MAKE) -C ../bootstrap/ clean

@@ -35,6 +35,10 @@
 
 ; expressions
 (struct (Quote val))
+; TODO distinguish Global from Label?
+; - Label would be for functions
+; - Global would be a redex; Label a value
+;   - avoids you needing an env for "value?"-check
 (struct (Global modname name))
 (struct (Var name))
 (struct (Error msg))
