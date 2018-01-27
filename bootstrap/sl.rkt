@@ -9,6 +9,8 @@ Goal: concicse bootstrapping
 
 Anti-Goal: integration with Racket ecosystem
 
+Non-Goal: correctness for programs other than compiler.sl
+
 |#
 
 (require racket/provide)

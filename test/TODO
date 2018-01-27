@@ -25,10 +25,10 @@ TODO don't aim for parity, and don't rely on codgen pass for correctness:
   - will be visible to optimization passes
 
 steps:
-- check bootstrap/Makefile: is it testing too much?
+- DONE check bootstrap/Makefile: is it testing too much?
   - nope lgtm
-- remove Racket output from test/Makefile
-  
+- DONE remove Racket output from test/Makefile
+
 - write the test plan
 - write the tests
 - pass the tests
@@ -48,24 +48,39 @@ strings
 - utf-16 vs true code points
   - which code points are representable?
   - length with emojii and stuff
+  - https://dmitripavlutin.com/what-every-javascript-developer-should-know-about-unicode/
+  - https://github.com/camertron/utfstring
+  - for now I'm going to say only ascii is allowed. later I'll have to choose between codepoints / grapheme clusters. swift seems pretty smart by choosing grapheme clusters, but Rust is probably more efficient by exposing utf8 bytes...
 
 
 ints
-- size limits
+- size limits?
   - should it wrap? saturate? error?
+  - maybe not!
+  - my design goal is simplicity,
+    so maybe I have to support bigint...
+  - I can always add "i32" values later
 - negative numbers
 - division by zero
 - negative zero? try it in JS first
+
+  - https://peterolson.github.io/BigInteger.js/BigInteger.min.js
 
 
 imports?
 - ... test suite assumes 1 test = 1 file ...
   - could just add another rule in Makefile for this one test.
+- meh: this is already tested by virtue of
+  compiler.mjs running successfully
 
 
 structs
 - constructor is a value
 - can rename a constructor and match using it
 - arity in, out
-- TODO
 
+
+functions
+
+
+match

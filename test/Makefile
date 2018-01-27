@@ -49,10 +49,10 @@ build/%.mjs: %.sl $(wildcard ../bootstrap/*.rkt) $(wildcard ../boostrap/*.sl) | 
 build/%.mjs.bootstrapped: %.sl ../bootstrap/compiler.mjs | build
 	$(NODE) ../bootstrap/bootstrap.mjs <$<  >$@
 
-# The build directory should exist and contain a link to primitives.mjs
+# The build directory should exist and contain a copy of primitives.mjs
 build:
 	mkdir $@
-	cd $@ && ln -s ../../bootstrap/primitives.mjs
+	cd $@ && cp ../../bootstrap/primitives.mjs .
 
 
 ../bootstrap/compiler.mjs:
