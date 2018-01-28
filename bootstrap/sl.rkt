@@ -123,7 +123,7 @@ Non-Goal: correctness for programs other than compiler.sl
 (define-syntax (sl:#%datum stx)
   (syntax-case stx ()
     [(_ . v) (string? (syntax-e #'v)) #'(quote v)]
-    [(_ . i) (exact-nonnegative-integer? (syntax-e #'i)) #'(quote i)]
+    [(_ . i) (exact-integer? (syntax-e #'i)) #'(quote i)]
     [(_ . b) (boolean? (syntax-e #'b)) #'(quote b)]))
 
 

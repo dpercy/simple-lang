@@ -170,14 +170,24 @@
 
 (def (convert-token t)
   (match (andmap digit? (string-chars t))
+    ; non-signed integer literal
     [#true (SelfQuoting (string->int t))]
     [#false
-     (match t
-       ["#true" (SelfQuoting #true)]
-       ["#t" (SelfQuoting #true)]
-       ["#false" (SelfQuoting #false)]
-       ["#f" (SelfQuoting #false)]
-       [t t])]))
+     (match (list (substring t 0 1)
+                  (andmap digit? (string-chars (substring* t 1)))
+                  (< 1 (string-length t)))
+       ; explicit positive integer literal
+       [(list "+" #true #true)  (SelfQuoting (string->int (substring* t 1)))]
+       ; negative integer literal
+       [(list "-" #true #true)  (SelfQuoting (- 0 (string->int (substring* t 1))))]
+       [otherwise
+        ; not an integer literal
+        (match t
+          ["#true" (SelfQuoting #true)]
+          ["#t" (SelfQuoting #true)]
+          ["#false" (SelfQuoting #false)]
+          ["#f" (SelfQuoting #false)]
+          [t t])])]))
 
 
 
@@ -185,6 +195,11 @@
   (rev-digits->int (map digit-value (reverse (string-chars s)))))
 
 (def (int->string n)
+  (match (< n 0)
+    [#true (string-append "-" (nat->string (- 0 n)))]
+    [#false (nat->string n)]))
+
+(def (nat->string n)
   (match (string-append* (reverse (int->rev-digits n)))
     ; An "empty int literal" isn't a thing,
     ; so replace it with zero.
@@ -338,7 +353,7 @@
 (def (prelude)
   (string-append*
    (list
-    "import { show, "
+    "import { toplevel, "
     (commas (map emit-name prelude-names))
     " } from \"./primitives.mjs\";\n")))
 
@@ -384,7 +399,7 @@
   ; generate a JS statement, as a string
   (match stmt
     [(ToplevelExpr e)
-     (string-append* (list "console.log(show(" (gen-expr e) "));\n"))]
+     (string-append* (list "toplevel(() => " (gen-expr e) ");\n"))]
     [(DefVal name e) (string-append*
                       (list
                        "export const "

@@ -20,6 +20,14 @@ export function show(v) {
     }
 }
 
+export function toplevel(f) {
+    try {
+        console.log(show(f()));
+    } catch(e) {
+        console.log(e);
+    }
+}
+
 export function $boolean$63$(v) { return typeof v === "boolean"; }
 export function $int$63$(v) { return Number.isInteger(v); }
 export function $$43$(x, y) {
@@ -50,8 +58,9 @@ export function $$47$(x, y) {
 
     // And watch out for division by zero!
     // JS will give you Infinity, but that's not an int.
+    // TODO use BigInteger instead...
     if (!$int$63$(result))
-        throw "/ result was not an integer";
+        throw "/: division by zero";
     return result;
 }
 
