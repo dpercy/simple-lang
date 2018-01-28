@@ -7,5 +7,3 @@
 "\0"
 0
 (error "chr: expected an ASCII integer")
-"\u{1}"
-"\u{6}"

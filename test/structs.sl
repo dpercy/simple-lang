@@ -9,6 +9,7 @@ d
   [otherwise "uh oh"])
 (def (f)
   Derp)
+f
 (def p (f))
 (match (Derp)
   [(p) "computed constructors are patterns too"]

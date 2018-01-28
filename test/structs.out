@@ -3,6 +3,7 @@ Derp
 (Derp)
 Derp
 "renamed constructors are patterns too"
+f
 "computed constructors are patterns too"
 (error "Derp: expected 0 arguments, but got 1")
 Triple

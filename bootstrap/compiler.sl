@@ -139,7 +139,8 @@
 
 (def (read-string/escape s)
   (match (match (substring s 0 1)
-           ; keep me in sync with char-escape
+           ; keep me in sync with char-escape,
+           ; and with primitives.mjs showString...
            ["0" "\0"]
            ["r" "\r"]
            ["n" "\n"]
@@ -415,17 +416,11 @@
                                  "("
                                  (commas (map emit-name params))
                                  ") {\n"
-                                 "if (arguments.length !== " (int->string (length params)) ") {\n"
-                                 "  throw (" (emit-quoted-string (string-append* (list name
-                                                                                       "expected "
-                                                                                       (int->string (length params))
-                                                                                       " arguments but got")))
-                                 " + arguments.length);\n"
-                                 "}\n"
+                                 (emit-arity-check name (length params))
                                  "return " (gen-expr body) ";\n"
                                  "}\n"
                                  (emit-name name)
-                                 ".toString = () => " (emit-quoted-string name) ";\n"))]
+                                 ".schemeName = " (emit-quoted-string name) ";\n"))]
 
     [(DefStruct name params)
      (match (cons name (map emit-name (cons name params)))
@@ -433,10 +428,23 @@
         (string-append*
          (list
           "export function " name "(" (commas params) ") {\n"
+          ; Arity check before `this` check,
+          ; because the inner call using `new` always has the correct arity.
+          (emit-arity-check orig-name (length params))
           "  if (!(this instanceof " name ")) return new " name "(" (commas params) ");\n"
           (emit-constructor-body params 0)
           "}\n"
           name ".schemeName = " (emit-quoted-string orig-name) ";\n"))])]))
+
+(def (emit-arity-check name expected-num-args)
+  (string-append*
+   (list
+    "  if (arguments.length !== " (int->string expected-num-args) ")"
+    " throw (" (emit-quoted-string (string-append* (list name
+                                                         ": expected "
+                                                         (int->string expected-num-args)
+                                                         " arguments, but got ")))
+    " + arguments.length);\n")))
 
 (def (replace-suffix s old new)
   (match (- (string-length s) (string-length old))
@@ -549,7 +557,8 @@
 
 (def (char-escape c)
   (match c
-    ; keep me in sync with read-string/escape
+    ; keep me in sync with read-string/escape,
+    ; and with primitives.mjs showString...
     ["\0" "\\0"]
     ["\r" "\\r"]
     ["\n" "\\n"]

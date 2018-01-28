@@ -11,7 +11,7 @@ export function show(v) {
     case 'boolean':
         return v ? "#true" : "#false";
     case 'string':
-        return JSON.stringify(v);
+        return showString(v);
     case 'function':
         return v.schemeName || showRaw(v);
     case 'object': {
@@ -30,6 +30,29 @@ export function show(v) {
         
     default: return showRaw(v);
     }
+}
+
+function showString(s) {
+    // TODO seems like this function should be written in sl...
+    // - it's a new case!
+    //   a function written in sl,
+    //   that the compiler emits calls for.
+    //   it's built-in -- but also derived.
+    var out = '"';
+    for (const c of s) {
+        // Keep me in sync with char-escape from compiler.sl ...
+        switch (c) {
+        case '\0': out += "\\0"; break;
+        case '\r': out += "\\r"; break;
+        case '\n': out += "\\n"; break;
+        case '\t': out += "\\t"; break;
+        case '\"': out += "\\\""; break;
+        case '\\': out += "\\\\"; break;
+        default: out += c; break;
+        }
+    }
+    out += '"';
+    return out;
 }
 
 function showRaw(v) {
@@ -184,7 +207,7 @@ export function $ord(s) {
     if (!($string$63$(s)))
         throw "ord: expected a string";
     if (s.length !== 1)
-        throw "ord: expected a single character";
+        throw "ord: expected a character";
     return bigInt(s.charCodeAt(0));
 }
 $ord.schemeName = "ord";
@@ -195,6 +218,9 @@ export function $chr(i) {
     // TODO make JS strings work by code points instead?
     if (!($int$63$(i))) {
         throw "chr: expected an integer";
+    }
+    if (!(bigInt.zero.leq(i) && i.leq(127))) {
+        throw "chr: expected an ASCII integer";
     }
     return String.fromCharCode(i);
 }

@@ -1,6 +1,10 @@
 SHELL=/bin/bash -o pipefail
 DIFF = diff -U10
-COLORDIFF = $(shell which -a colordiff cat 2>/dev/null | head -n 1)
+
+# If colordiff is installed, use colordiff --color=yes.
+# Otherwise fall back to cat.
+# --color=yes forces color output even when using gmake -j -O
+COLORDIFF = $(shell if which -s colordiff ; then echo colordiff --color=yes ; else echo cat ; fi)
 
 NODE = node --experimental-modules --no-warnings
 
