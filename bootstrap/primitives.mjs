@@ -252,3 +252,10 @@ export function $equal$63$(x, y) {
     }
 }
 $equal$63$.schemeName = "equal?";
+
+export function isA(val, numParams, ctor) {
+    if (!(val instanceof ctor)) return false;
+    if (numParams !== ctor.length)
+        throw (ctor.schemeName + ": has " + ctor.length + " fields, but pattern has " + numParams);
+    return true;
+}

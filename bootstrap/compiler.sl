@@ -355,7 +355,7 @@
 (def (prelude)
   (string-append*
    (list
-    "import { toplevel, bigInt, "
+    "import { toplevel, bigInt, isA, "
     (commas (map emit-name prelude-names))
     " } from \"./primitives.mjs\";\n")))
 
@@ -525,7 +525,7 @@
      ;   2. a bind phase: sequence of "const x = ..." statements
      (string-append*
       (list
-       "if (!(" scrut " instanceof " (gen-expr ctor) ")) break;\n"
+       "if (!(isA(" scrut ", " (int->string (length args)) ", " (gen-expr ctor) "))) break;\n"
        (gen-pat-args scrut 0 args)
        ;;
        ))]))
