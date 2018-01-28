@@ -40,13 +40,13 @@ Non-Goal: correctness for programs other than compiler.sl
          ; these all fail if the result is not a fixnum.
          ; TODO what if different platforms have different fixnum sizes?
          ;   - then a cross-compiler might constant-fold incorrectly
-         (rename-out [fixnum? int?]
-                     [fx+ +]
-                     [fx- -]
-                     [fx* *]
-                     [fxquotient /]
-                     [fx< <]
-                     [fx= =])
+         (rename-out [exact-integer? int?]
+                     [+ +]
+                     [- -]
+                     [* *]
+                     [quotient /]
+                     [< <]
+                     [= =])
 
          ; primitives for dealing with strings:
          ; note these all depend on ints and booleans,

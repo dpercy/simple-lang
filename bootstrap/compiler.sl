@@ -139,6 +139,7 @@
 (def (read-string/escape s)
   (match (match (substring s 0 1)
            ; keep me in sync with char-escape
+           ["0" "\0"]
            ["r" "\r"]
            ["n" "\n"]
            ["t" "\t"]
@@ -399,7 +400,10 @@
                                  (commas (map emit-name params))
                                  ") { return "
                                  (gen-expr body)
-                                 "; }\n"))]
+                                 "; }\n"
+                                 (emit-name name)
+                                 ".toString = () => " (emit-quoted-string name) ";\n"
+                                 ))]
 
     [(DefStruct name params)
      (match (cons name (map emit-name (cons name params)))
@@ -524,6 +528,7 @@
 (def (char-escape c)
   (match c
     ; keep me in sync with read-string/escape
+    ["\0" "\\0"]
     ["\r" "\\r"]
     ["\n" "\\n"]
     ["\t" "\\t"]

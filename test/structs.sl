@@ -8,7 +8,7 @@ d
   [(d) "renamed constructors are patterns too"]
   [otherwise "uh oh"])
 (def (f)
-  derp)
+  Derp)
 (def p (f))
 (match (Derp)
   [(p) "computed constructors are patterns too"]
