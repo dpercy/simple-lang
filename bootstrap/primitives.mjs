@@ -12,8 +12,10 @@ export function show(v) {
         return v ? "#true" : "#false";
     case 'string':
         return JSON.stringify(v);
+    case 'function':
+        return v.schemeName || showRaw(v);
     case 'object': {
-        if ($int$63$) {
+        if ($int$63$(v)) {
             return v.toString();
         }
 
@@ -26,9 +28,12 @@ export function show(v) {
         return s;
     }
         
-    default:
-        return v.toString();
+    default: return showRaw(v);
     }
+}
+
+function showRaw(v) {
+    return "(### RAW JS VALUE ### " + v + " ###)";
 }
 
 export function toplevel(f) {
@@ -40,24 +45,31 @@ export function toplevel(f) {
 }
 
 export function $boolean$63$(v) { return typeof v === "boolean"; }
+$boolean$63$.schemeName = "boolean?";
+
 export function $int$63$(v) { return bigInt.isInstance(v); }
+$int$63$.schemeName = "int?";
+
 export function $$43$(x, y) {
     if (!($int$63$(x) && $int$63$(y)))
         throw "+ expects integers";
     return x.plus(y);
 }
+$$43$.schemeName = "+";
 
 export function $_(x, y) {
     if (!($int$63$(x) && $int$63$(y)))
         throw "- expects integers";
     return x.minus(y);
 }
+$_.schemeName = "-";
 
 export function $$42$(x, y) {
     if (!($int$63$(x) && $int$63$(y)))
         throw "* expects integers";
     return x.times(y);
 }
+$$42$.schemeName = "*";
 
 export function $$47$(x, y) {
     if (!($int$63$(x) && $int$63$(y)))
@@ -69,40 +81,46 @@ export function $$47$(x, y) {
 
     return x.divide(y);
 }
+$$47$.schemeName = "/";
 
 export function $$60$(x, y) {
     if (!($int$63$(x) && $int$63$(y)))
         throw "< expects integers";
     return x.lesser(y);
 }
+$$60$.schemeName = "<";
 
 export function $$61$(x, y) {
     if (!($int$63$(x) && $int$63$(y)))
         throw "= expects integers";
     return x.equals(y);
 }
-
+$$61$.schemeName = "=";
 
 
 export function $string$63$(v) { return typeof v === 'string'; }
+$string$63$.schemeName = "string?";
 
 export function $string$61$$63$(x, y) {
     if (!($string$63$(x) && $string$63$(y)))
         throw "string=? expects strings";
     return x === y;
 }
+$string$61$$63$.schemeName = "string=?";
 
 export function $string_append(x, y) {
     if (!($string$63$(x) && $string$63$(y)))
         throw "string-append expects strings";
     return x + y;
 }
+$string_append.schemeName = "string-append";
 
 export function $string_length(x) {
     if (!($string$63$(x)))
         throw "string-length expect a string";
     return bigInt(x.length);
 }
+$string_length.schemeName = "string-length";
 
 export function $substring(x, start, end) {
     if (!($string$63$(x))) {
@@ -126,6 +144,7 @@ export function $substring(x, start, end) {
     }
     return x.slice(start, end);
 }
+$substring.schemeName = "substring";
 
 export function $ord(s) {
     if (!($string$63$(s)))
@@ -134,6 +153,7 @@ export function $ord(s) {
         throw "ord expects a single character";
     return bigInt(s.charCodeAt(0));
 }
+$ord.schemeName = "ord";
 
 export function $chr(i) {
     // TODO make JS strings work by code points instead?
@@ -142,6 +162,7 @@ export function $chr(i) {
     }
     return String.fromCharCode(i);
 }
+$chr.schemeName = "chr";
     
 export function $equal$63$(x, y) {
     // equal? works on bools, ints, strings, and structs.
@@ -166,3 +187,4 @@ export function $equal$63$(x, y) {
         return false;
     }
 }
+$equal$63$.schemeName = "equal?";
