@@ -1,3 +1,4 @@
+SHELL=/bin/bash -o pipefail
 DIFF = diff -U10
 COLORDIFF = $(shell which -a colordiff cat 2>/dev/null | head -n 1)
 

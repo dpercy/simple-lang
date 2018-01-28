@@ -1,3 +1,4 @@
+SHELL=/bin/bash -o pipefail
 
 SOURCES  = $(wildcard *.sl)
 OUTPUTS  = $(SOURCES:.sl=.mjs)
