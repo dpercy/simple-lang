@@ -14,6 +14,7 @@
 (def andmap list.andmap)
 (def reverse list.reverse)
 (def set-union list.set-union)
+(def length list.length)
 
 ; TODO design libraries for qualified use, like in Go:
 ;  - not "string.string-append" but "string.append" or even "string.++"
@@ -413,12 +414,18 @@
                                  (emit-name name)
                                  "("
                                  (commas (map emit-name params))
-                                 ") { return "
-                                 (gen-expr body)
-                                 "; }\n"
+                                 ") {\n"
+                                 "if (arguments.length !== " (int->string (length params)) ") {\n"
+                                 "  throw (" (emit-quoted-string (string-append* (list name
+                                                                                       "expected "
+                                                                                       (int->string (length params))
+                                                                                       " arguments but got")))
+                                 " + arguments.length);\n"
+                                 "}\n"
+                                 "return " (gen-expr body) ";\n"
+                                 "}\n"
                                  (emit-name name)
-                                 ".toString = () => " (emit-quoted-string name) ";\n"
-                                 ))]
+                                 ".toString = () => " (emit-quoted-string name) ";\n"))]
 
     [(DefStruct name params)
      (match (cons name (map emit-name (cons name params)))

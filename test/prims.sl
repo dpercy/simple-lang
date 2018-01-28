@@ -1,5 +1,4 @@
 + ; printing
-error
 (+ 2 3) ; arity
 (+ 2 3 4)
 (+ 1)

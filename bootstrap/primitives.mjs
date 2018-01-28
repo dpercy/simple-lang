@@ -44,36 +44,52 @@ export function toplevel(f) {
     }
 }
 
-export function $boolean$63$(v) { return typeof v === "boolean"; }
+export function $boolean$63$(v) {
+    if (arguments.length !== 1)
+        throw "boolean?: expected 1 argument but got " + arguments.length;
+    return typeof v === "boolean";
+}
 $boolean$63$.schemeName = "boolean?";
 
-export function $int$63$(v) { return bigInt.isInstance(v); }
+export function $int$63$(v) {
+    if (arguments.length !== 1)
+        throw "int?: expected 1 argument but got " + arguments.length;
+    return bigInt.isInstance(v);
+}
 $int$63$.schemeName = "int?";
 
 export function $$43$(x, y) {
+    if (arguments.length !== 2)
+        throw "+: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
-        throw "+ expects integers";
+        throw "+: expected an integer";
     return x.plus(y);
 }
 $$43$.schemeName = "+";
 
 export function $_(x, y) {
+    if (arguments.length !== 2)
+        throw "-: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
-        throw "- expects integers";
+        throw "-: expected an integer";
     return x.minus(y);
 }
 $_.schemeName = "-";
 
 export function $$42$(x, y) {
+    if (arguments.length !== 2)
+        throw "*: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
-        throw "* expects integers";
+        throw "*: expected an integer";
     return x.times(y);
 }
 $$42$.schemeName = "*";
 
 export function $$47$(x, y) {
+    if (arguments.length !== 2)
+        throw "/: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
-        throw "/ expects integers";
+        throw "/: expected an integer";
 
     if (y.equals(0)) {
         throw "/: division by zero";
@@ -84,38 +100,52 @@ export function $$47$(x, y) {
 $$47$.schemeName = "/";
 
 export function $$60$(x, y) {
+    if (arguments.length !== 2)
+        throw "<: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
-        throw "< expects integers";
+        throw "<: expected an integer";
     return x.lesser(y);
 }
 $$60$.schemeName = "<";
 
 export function $$61$(x, y) {
+    if (arguments.length !== 2)
+        throw "=: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
-        throw "= expects integers";
+        throw "=: expected an integer";
     return x.equals(y);
 }
 $$61$.schemeName = "=";
 
 
-export function $string$63$(v) { return typeof v === 'string'; }
+export function $string$63$(v) {
+    if (arguments.length !== 1)
+        throw "string?: expected 1 argument but got " + arguments.length;
+    return typeof v === 'string';
+}
 $string$63$.schemeName = "string?";
 
 export function $string$61$$63$(x, y) {
+    if (arguments.length !== 2)
+        throw "string=?: expected 2 arguments but got " + arguments.length;
     if (!($string$63$(x) && $string$63$(y)))
-        throw "string=? expects strings";
+        throw "string=?: expected a string";
     return x === y;
 }
 $string$61$$63$.schemeName = "string=?";
 
 export function $string_append(x, y) {
+    if (arguments.length !== 2)
+        throw "string-append: expected 2 arguments but got " + arguments.length;
     if (!($string$63$(x) && $string$63$(y)))
-        throw "string-append expects strings";
+        throw "string-append: expected a string";
     return x + y;
 }
 $string_append.schemeName = "string-append";
 
 export function $string_length(x) {
+    if (arguments.length !== 1)
+        throw "string-length: expected 1 argument but got " + arguments.length;
     if (!($string$63$(x)))
         throw "string-length expect a string";
     return bigInt(x.length);
@@ -123,6 +153,8 @@ export function $string_length(x) {
 $string_length.schemeName = "string-length";
 
 export function $substring(x, start, end) {
+    if (arguments.length !== 3)
+        throw "substring: expected 3 arguments but got " + arguments.length;
     if (!($string$63$(x))) {
         throw "substring expect a string";
     }
@@ -147,24 +179,30 @@ export function $substring(x, start, end) {
 $substring.schemeName = "substring";
 
 export function $ord(s) {
+    if (arguments.length !== 1)
+        throw "ord: expected 1 argument but got " + arguments.length;
     if (!($string$63$(s)))
-        throw "ord expects a string";
+        throw "ord: expected a string";
     if (s.length !== 1)
-        throw "ord expects a single character";
+        throw "ord: expected a single character";
     return bigInt(s.charCodeAt(0));
 }
 $ord.schemeName = "ord";
 
 export function $chr(i) {
+    if (arguments.length !== 1)
+        throw "chr: expected 1 argument but got " + arguments.length;
     // TODO make JS strings work by code points instead?
     if (!($int$63$(i))) {
-        throw "chr expects an integer";
+        throw "chr: expected an integer";
     }
     return String.fromCharCode(i);
 }
 $chr.schemeName = "chr";
     
 export function $equal$63$(x, y) {
+    if (arguments.length !== 2)
+        throw "equal?: expected 2 arguments but got " + arguments.length;
     // equal? works on bools, ints, strings, and structs.
     if (x === y) return true;
     if ($int$63$(x)) {

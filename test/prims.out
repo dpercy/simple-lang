@@ -1,11 +1,10 @@
 +
-error
 5
-(error "+: expected 2 arguments")
-(error "+: expected 2 arguments")
-(error "+: expected 2 arguments")
+(error "+: expected 2 arguments but got 3")
+(error "+: expected 2 arguments but got 1")
+(error "+: expected 2 arguments but got 0")
 "fo"
-(error "substring: expected 2 arguments")
+(error "substring: expected 3 arguments but got 2")
 (error "+: expected an integer")
 "foobar"
-(error "string-append: expected an integer")
+(error "string-append: expected a string")
