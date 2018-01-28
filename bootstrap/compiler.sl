@@ -353,7 +353,7 @@
 (def (prelude)
   (string-append*
    (list
-    "import { toplevel, "
+    "import { toplevel, bigInt, "
     (commas (map emit-name prelude-names))
     " } from \"./primitives.mjs\";\n")))
 
@@ -500,7 +500,7 @@
     [(PatLitr v)
      (string-append*
       (list
-       "if (" scrut " !== " (emit-quoted-constant v) ") break;\n"
+       "if (!$equal$63$(" scrut ", " (emit-quoted-constant v) ")) break;\n"
        ;;
        ))]
     [(PatCtor ctor args)
@@ -552,9 +552,8 @@
     [c c]))
 
 (def (emit-int v)
-  ; represent nats as JS numbers.
-  ; it's fine if they don't get too big.
-  (int->string v))
+  ; represent ints as bigInt instances
+  (string-append* (list "bigInt(" (emit-quoted-string (int->string v)) ")")))
 
 (def (emit-bool b)
   (match b
