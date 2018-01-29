@@ -12,6 +12,6 @@ Handler.extensions_map.update({
 
 httpd = SocketServer.TCPServer(("", PORT), Handler)
 
-print "Serving at port", PORT
+print "Serving at http://localhost:"+str(PORT)+"/notebook.html"
 httpd.serve_forever()
 
