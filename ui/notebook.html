@@ -106,7 +106,15 @@
 
 <script src="vendor/codemirror.js"></script>
 <script src="vendor/scrollpastend.js"></script>
+<script type="module">
+  //import { $compile } from "./bootstrap/compiler.mjs";
+  //import {} from "./bootstrap/bool.mjs";
+  import {bigInt} from "./bootstrap/BigInteger.js";
+  console.log('hi');
+  
+</script>
 <script>
+  
   // wrap a void function,
   // so that calling it will be delayed to avoid duplicate calls.
   // only the most recent arglist is passed.
@@ -127,48 +135,7 @@
   });
   const filenameInput = document.getElementById('filename');
 
-  var connection = new WebSocket('ws://localhost:8001');
-  connection.onopen = function(ev) {
-    function update() {
-      var contents = editor.getValue();
-      connection.send(contents);
-    }
-
-    editor.on('change', update);
-    update();
-  };
-  connection.onmessage = debounce(150, function(ev) {
-    const text = ev.data;
-    const json = JSON.parse(text);
-    console.log('applying', json.length, 'results:', json.map(doc => doc.name));
-
-    //editor.operation(() => {
-      for (const lw of lineWidgets) {
-	lw.clear();
-      }
-      lineWidgets = [];
-      for (const result of json) {
-	if (typeof result.endline === 'number') {
-	  const lw = editor.addLineWidget(result.endline - 1, createResultWidget(result));
-	  lineWidgets.push(lw);
-	}
-      }
-  //});
-  });
-  var lineWidgets = [];
-
-  function createResultWidget(result) {
-    const elem = document.createElement('div');
-    if (result.valueText) {
-      elem.classList = 'result value';
-      elem.innerText = result.valueText;
-    } else if (result.errorText) {
-      elem.classList = 'result error';
-      elem.innerText = result.errorText;
-    }
-    return elem;
-  }
-
+  
   editor.on('change', saveInBrowser);
   filenameInput.addEventListener('change', saveInBrowser);
   function saveInBrowser() {

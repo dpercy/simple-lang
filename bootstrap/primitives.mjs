@@ -1,4 +1,4 @@
-import bigInt from "./BigInteger.js";
+import bigInt from "./BigInteger.mjs";
 
 export { bigInt };
 

@@ -44,7 +44,7 @@ diff/%: build/%.mjs build/%.mjs.bootstrapped
 # - the input .sl file
 # - the .rkt shims for running compiler.sl on Racket
 # - the compiler itself: a set of .sl files in bootstrap/
-build/%.mjs: %.sl $(wildcard ../bootstrap/*.rkt) $(wildcard ../boostrap/*.sl) build/primitives.mjs build/BigInteger.js
+build/%.mjs: %.sl $(wildcard ../bootstrap/*.rkt) $(wildcard ../boostrap/*.sl) build/primitives.mjs build/BigInteger.mjs
 	racket  ../bootstrap/test-boot.rkt <$<  >$@
 
 # Another way is to run compiler.mjs in node.
@@ -58,9 +58,9 @@ build/primitives.mjs:
 	mkdir -p build
 	cp ../bootstrap/primitives.mjs build/
 
-build/BigInteger.js:
+build/BigInteger.mjs:
 	mkdir -p build
-	cp ../bootstrap/BigInteger.js build/
+	cp ../bootstrap/BigInteger.mjs build/
 
 
 ../bootstrap/compiler.mjs:
