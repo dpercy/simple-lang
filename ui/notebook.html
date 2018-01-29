@@ -8,11 +8,20 @@
     display: flex;
     flex-direction: row;
   }
-  body > .CodeMirror {
-    width: 100%;
+  body > .CodeMirror,
+  body > #output {
+    width: 50%;
     height: calc(100% - 20px); /* subtract #toolbar height */
     margin: 0;
   }
+
+  #output {
+    background-color: #fffdea;
+    font-family: Monaco, monospace;
+    font-size: 14px;
+    overflow: scroll;
+  }
+
 
   #toolbar {
     position: fixed;
@@ -96,6 +105,8 @@
 
 <textarea id="myTextarea">
 </textarea>
+<pre id="output">
+</pre>
 <aside id="toolbar">
   <button id="save" draggable="true">save</button>
   <input id="filename" value="example.sl" />
@@ -107,13 +118,7 @@
 <script src="vendor/codemirror.js"></script>
 <script src="vendor/scrollpastend.js"></script>
 <script type="module">
-  //import { $compile } from "./bootstrap/compiler.mjs";
-  //import {} from "./bootstrap/bool.mjs";
-  import {bigInt} from "./bootstrap/BigInteger.js";
-  console.log('hi');
-  
-</script>
-<script>
+  import { $compile_program } from "./bootstrap/compiler.mjs";
   
   // wrap a void function,
   // so that calling it will be delayed to avoid duplicate calls.
@@ -135,6 +140,16 @@
   });
   const filenameInput = document.getElementById('filename');
 
+  editor.on('change', function() {
+    const sourceText = editor.getValue();
+    try {
+      const jsText = $compile_program(sourceText);
+      document.getElementById('output').innerText = jsText;
+    } catch(e) {
+      window.e = e;
+      document.getElementById('output').innerText = e;
+    }
+  });
   
   editor.on('change', saveInBrowser);
   filenameInput.addEventListener('change', saveInBrowser);
