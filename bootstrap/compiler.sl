@@ -293,8 +293,6 @@
                                 (map parse-expr args))])]))
 
 (def (parse-var str)
-  ; TODO parse a dot and make a qualified name
-  ; TODO then in codegen, lift imports from qualified names
   (match (string.string-split str ".")
     [(list name) (Var name)]
     [(list modname name) (Global modname name)]
@@ -401,14 +399,14 @@
   ; generate a JS statement, as a string
   (match stmt
     [(ToplevelExpr e)
-     (string-append* (list "toplevel(() => " (gen-expr e) ");\n"))]
+     (string-append* (list "toplevel(false, () => " (gen-expr e) ");\n"))]
     [(DefVal name e) (string-append*
                       (list
                        "export const "
                        (emit-name name)
-                       " = "
-                       (gen-expr e)
-                       ";\n"))]
+                       " = toplevel("
+                       (emit-quoted-string name)
+                       ", () => " (gen-expr e) ");\n"))]
     [(DefFun name params body) (string-append*
                                 (list
                                  "export function "
@@ -470,13 +468,27 @@
        ";\n"
        (emit-constructor-body params (+ idx 1))))]))
 
+(def (wrap-check-undefined name js-expr)
+  ; TODO try something more like "fixing letrec", or dep-graph sorting, for efficiency
+  (string-append* (list
+                   "(undefined === "
+                   js-expr
+                   "?"
+                   (gen-expr (Error (string-append*
+                                     (list name " is not defined"))))
+                   ":"
+                   js-expr
+                   ")")))
+
 (def (gen-expr expr)
   ; generate a JS expr, as a string
   (match expr
     [(Quote v) (emit-quoted-constant v)]
-    [(Var name) (emit-name name)]
-    [(Global mod name) (string-append*
-                        (list (emit-name mod) "." (emit-name name)))]
+    [(Var name) (wrap-check-undefined name (emit-name name))]
+    [(Global mod name) (wrap-check-undefined
+                        name
+                        (string-append*
+                         (list (emit-name mod) "." (emit-name name))))]
     [(Error msg) (emit-error msg)]
     [(Call func args) (emit-call (gen-expr func)
                                  (map gen-expr args))]

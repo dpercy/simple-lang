@@ -4,9 +4,10 @@ DONE compiler.sl that can bootstrap itself to JS
       including EVERY code path that leads to an error!)
 
 
-TODO language test suite
+(DONE FOR NOW) language test suite
 - defined as input / output / error text files
-- test runner should test both implementations: sl.rkt, and compiler.sl
+- (nope) test runner should test both implementations: sl.rkt, and compiler.sl
+   - I decided that sl.rkt is a shim whose only purpose is to run compiler.sl on any input
 - should also test that compiler.sl-on-Racket and compiler.mjs match
 - unit tests should each focus on one aspect of one language form
 - squash portability bugs - int size limits - string unicode - arity errors

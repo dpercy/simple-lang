@@ -59,11 +59,24 @@ function showRaw(v) {
     return "(### RAW JS VALUE ### " + v + " ###)";
 }
 
-export function toplevel(f) {
+export function toplevel(name, computeValue) {
     try {
-        console.log(show(f()));
+    	const val = computeValue();
+	if (name) {
+            // TODO print definitions?
+            //console.log("(def " + name + " " + show(val) + ")");
+        } else {
+            console.log(show(val));
+        }
+	return val;
     } catch(e) {
-        console.log(showError(e));
+        if (name) {
+            // TODO print errors in failed definitions?
+            // it's not really a definition if it fails to define...
+        } else {
+            console.log(showError(e));
+        }
+	return undefined;
     }
 }
 
