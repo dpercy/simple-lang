@@ -144,7 +144,18 @@
     const sourceText = editor.getValue();
     try {
       const jsText = $compile_program(sourceText);
-      document.getElementById('output').innerText = jsText;
+      ///document.getElementById('output').innerText = jsText;
+      const output = document.getElementById('output');
+      output.innerText = '';
+
+      // eval!
+      // hax for redirecting console.log!
+      window.console.log = (v) => { output.innerText += v + '\n' };
+      const script = document.createElement('script');
+      script.type = "module";
+      script.innerText = jsText;
+      document.body.appendChild(script);
+      
     } catch(e) {
       window.e = e;
       document.getElementById('output').innerText = e;
