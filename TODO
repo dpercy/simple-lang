@@ -13,10 +13,15 @@ DONE compiler.sl that can bootstrap itself to JS
 - squash portability bugs - int size limits - string unicode - arity errors
 
 
+
+
 TODO recreate the notebook UI
+see NOTEBOOK
 - no websockets required any more - can do it all in JS
 - still need to avoid blocking the main thread - can use web workers
 - requires the compiler to handle reordering definitions?
+
+
 
 
 TODO debug mode
