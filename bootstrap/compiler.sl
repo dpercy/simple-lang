@@ -26,6 +26,7 @@
 (def string-append* string.string-append*)
 (def graphical? string.graphical?)
 (def alphanumeric? string.alphanumeric?)
+(def replace-suffix string.replace-suffix)
 
 
 ; statements
@@ -53,6 +54,51 @@
 (struct (PatLitr name))
 (struct (PatHole name))
 (struct (PatCtor ctor args))
+
+
+; helpers for dealing with core syntax
+
+; empty-case : a
+; append-case : (a, a) -> a
+; base-case : form -> (a | #false)
+; form : form
+(def (core-fold empty-case append-case base-case form)
+  (match (base-case form)
+    ; When base-case is #false, try the other cases.
+    [#false (match form
+
+              ; list of things
+              [(empty) empty-case]
+              [(cons form0 forms) (append-case
+                                   (core-fold empty-case append-case base-case form0)
+                                   (core-fold empty-case append-case base-case forms))]
+
+              ; statements
+              [(DefVal name expr)  (core-fold empty-case append-case base-case expr)]
+              [(DefFun name params body)  (core-fold empty-case append-case base-case body)]
+              [(DefStruct name params)  empty-case]
+              [(ToplevelExpr expr)  (core-fold empty-case append-case base-case expr)]
+
+              ; expressions
+              [(Quote val)  empty-case]
+              [(Global modname name)  empty-case]
+              [(Var name)  empty-case]
+              [(Error msg)  empty-case]
+              [(Call func args)  (core-fold empty-case append-case base-case (cons func args))]
+              [(Match scrut cases)  (core-fold empty-case append-case base-case (cons scrut cases))]
+
+              ; case - one arm of a match expression
+              [(Case pat expr)  (append-case
+                                 (core-fold empty-case append-case base-case pat)
+                                 (core-fold empty-case append-case base-case expr))]
+
+              ; patterns - left-hand side of a case
+              [(PatLitr name)  empty-case]
+              [(PatHole name)  empty-case]
+              [(PatCtor ctor args)  (core-fold empty-case append-case base-case (cons ctor args))])]
+
+    ; When base-case is non-#false, return that value and stop traversing.
+    [something something]))
 
 
 ; read ...
@@ -365,35 +411,14 @@
     ";\n")))
 
 (def (find-imports form)
+  (core-fold (empty)
+             set-union
+             find-imports/base-case
+             form))
+(def (find-imports/base-case form)
   (match form
-
-    ; list of things
-    [(empty) (empty)]
-    [(cons form0 forms) (set-union (find-imports form0)
-                                   (find-imports forms))]
-
-    ; statements
-    [(DefVal name expr)  (find-imports expr)]
-    [(DefFun name params body)  (find-imports body)]
-    [(DefStruct name params)  (empty)]
-    [(ToplevelExpr expr)  (find-imports expr)]
-
-    ; expressions
-    [(Quote val)  (empty)]
-    [(Global modname name)  (list modname)]
-    [(Var name)  (empty)]
-    [(Error msg)  (empty)]
-    [(Call func args)  (find-imports (cons func args))]
-    [(Match scrut cases)  (find-imports (cons scrut cases))]
-
-    ; case - one arm of a match expression
-    [(Case pat expr)  (set-union (find-imports pat)
-                                 (find-imports expr))]
-
-    ; patterns - left-hand side of a case
-    [(PatLitr name)  (empty)]
-    [(PatHole name)  (empty)]
-    [(PatCtor ctor args)  (find-imports (cons ctor args))]))
+    [(Global modname name) (list modname)]
+    [_ #false]))
 
 (def (gen-stmt stmt)
   ; generate a JS statement, as a string
@@ -443,17 +468,6 @@
                                                          (int->string expected-num-args)
                                                          " arguments, but got ")))
     " + arguments.length);\n")))
-
-(def (replace-suffix s old new)
-  (match (- (string-length s) (string-length old))
-    [baselen
-     (match (substring* s (- (string-length s) (string-length old)))
-       [old-suffix
-        (match (string=? old-suffix old)
-          [#false (error "wrong suffix")]
-          [#true
-           (string-append (substring s 0 baselen)
-                          new)])])]))
 
 (def (emit-constructor-body params idx)
   (match params

@@ -15,6 +15,20 @@ DONE compiler.sl that can bootstrap itself to JS
 
 
 
+TODO refactor into nanopass style
+problem:
+- codegen pass is doing too much!
+  - high level things like pattern-match control flow
+  - low level things like name mangling
+- there are no verification passes!
+solution:
+- refactor into many small passes
+- write helper functions to help with boring cases
+- keep everything as Core syntax as long as possible
+
+
+
+
 TODO recreate the notebook UI
 see NOTEBOOK
 - no websockets required any more - can do it all in JS

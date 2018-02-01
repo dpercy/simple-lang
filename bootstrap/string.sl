@@ -40,6 +40,17 @@
      (string=? prefix
                (substring s 0 (string-length prefix)))]))
 
+(def (replace-suffix s old new)
+  (match (- (string-length s) (string-length old))
+    [baselen
+     (match (substring* s (- (string-length s) (string-length old)))
+       [old-suffix
+        (match (string=? old-suffix old)
+          [#false (error "wrong suffix")]
+          [#true
+           (string-append (substring s 0 baselen)
+                          new)])])]))
+
 
 (def (string-split s sep)
   (match (startswith? s sep)
