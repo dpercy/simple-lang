@@ -39,28 +39,28 @@
   (slice s start (string-length s)))
 
 (def (startswith? s prefix)
-  (match (<= (string-length prefix)
-             (string-length s))
-    ; the string must be at least as long as the prefix
-    [#false #false]
-    [#true
-     (string=? prefix
-               (substring s 0 (string-length prefix)))]))
+  ; TODO use and
+  ; the string must be at least as long as the prefix
+  (if (<= (string-length prefix)
+          (string-length s))
+      (string=? prefix
+                (substring s 0 (string-length prefix)))
+      #false))
 
 (def (split s sep)
-  (match (startswith? s sep)
-    [#true (cons "" (split (slice* s (string-length sep))
-                           sep))]
-    [#false (match s
-              ; This is Python's take on split--
-              ; another option is to say (split "" _) == (empty),
-              ; but that seems to imply  (split "x," ",") == (list "x")
-              ; when (list "x" "") would make more sense.
-              ["" (list "")]
-              [s (match (split (slice* s 1) sep)
-                   [(cons x xs) (cons (string-append (substring s 0 1)
-                                                     x)
-                                      xs)])])]))
+  (if (startswith? s sep)
+      (cons "" (split (slice* s (string-length sep))
+                      sep))
+      (match s
+        ; This is Python's take on split--
+        ; another option is to say (split "" _) == (empty),
+        ; but that seems to imply  (split "x," ",") == (list "x")
+        ; when (list "x" "") would make more sense.
+        ["" (list "")]
+        [s (match (split (slice* s 1) sep)
+             [(cons x xs) (cons (string-append (substring s 0 1)
+                                               x)
+                                xs)])])))
 
 
 ; ascii table: https://www.unicode.org/charts/PDF/U0000.pdf

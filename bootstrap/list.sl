@@ -45,9 +45,9 @@
 (def (filter f lst)
   (match lst
     [(empty) (empty)]
-    [(cons x xs) (match (f x)
-                   [#true (cons x (filter f xs))]
-                   [#false (filter f xs)])]))
+    [(cons x xs) (if (f x)
+                     (cons x (filter f xs))
+                     (filter f xs))]))
 
 (def (reverse lst)
   (revappend lst (empty)))
@@ -60,9 +60,9 @@
 (def (andmap f lst)
   (match lst
     [(empty) #true]
-    [(cons x xs) (match (f x)
-                   [#false #false]
-                   [#true (andmap f xs)])]))
+    [(cons x xs) (if (f x) ; TODO use and
+                     (andmap f xs)
+                     #false)]))
 
 (def (append lst onto)
   (match lst
@@ -72,14 +72,14 @@
 (def (contains? lst item)
   (match lst
     [(empty) #false]
-    [(cons x xs) (match (equal? item x)
-                   [#true #true]
-                   [#false (contains? xs item)])]))
+    [(cons x xs) (if (equal? item x)
+                     #true
+                     (contains? xs item))]))
 
 (def (set-add base item)
-  (match (contains? base item)
-    [#true base]
-    [#false (cons item base)]))
+  (if (contains? base item)
+      base
+      (cons item base)))
 
 (def (set-union base more)
   (match more

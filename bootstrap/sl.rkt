@@ -31,7 +31,14 @@ Non-Goal: correctness for programs other than compiler.sl
                      ; syntax sugar for repeated cons and empty constructors
                      [sl:list list]
                      ; global variable handler - for imports
-                     [sl:#%top #%top])
+                     [sl:#%top #%top]
+                     ; if: sugar for match #true #false
+                     [sl:if if]
+                     ; short-circuiting and, or: sugar for repeated sl:if
+                     ;;[sl:and and]
+                     ;;[sl:or or]
+                     )
+
 
          ; primitives for dealing with booleans.
          boolean?
@@ -164,3 +171,8 @@ Non-Goal: correctness for programs other than compiler.sl
 
 (define (sl:substring s start end)
   (substring s start end))
+
+(define-syntax-rule (sl:if test consq alt)
+  (sl:match test
+            [#true consq]
+            [#false alt]))

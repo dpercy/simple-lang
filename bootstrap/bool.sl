@@ -2,9 +2,9 @@
 
 
 (def (not b)
-  (match b
-    [#true #false]
-    [#false #true]))
+  (if b
+      #false
+      #true))
 
 ; can't really do short-circuiting operations...
 ; would need laziness, macros, or something.

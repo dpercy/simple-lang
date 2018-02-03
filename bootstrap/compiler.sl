@@ -35,6 +35,12 @@
 (struct (Call func args))
 (struct (Match scrutinee cases))
 
+; TODO change these "smart constructors" into real structs
+(def (If test consq alt)
+  (Match test
+         (list (Case (PatLitr #true) consq)
+               (Case (PatLitr #false) alt))))
+
 ; case - one arm of a match expression
 (struct (Case pat expr))
 
@@ -123,14 +129,13 @@
        ["(" (read-list ")" (string.slice* s 1))]
        ["[" (read-list "]" (string.slice* s 1))]
        [c
-        (match (symbol-char? c)
-          [#true (read-symbol-or-int s)]
-          [#false
-           (match (= (ord c) (ord "\""))
-             [#true (match (read-string (string.slice* s 1))
-                      [(VS t s) (VS (SelfQuoting t) s)])]
-             ; hack for error reporting: (match c) complains about the value c
-             [#false (match c)])])])]))
+        (if (symbol-char? c)
+            (read-symbol-or-int s)
+            (if (= (ord c) (ord "\""))
+                (match (read-string (string.slice* s 1))
+                  [(VS t s) (VS (SelfQuoting t) s)])
+                ; hack for error reporting: (match c) complains about the value c
+                (match c)))])]))
 
 (def (drop-whitespace s)
   (match s
@@ -139,9 +144,9 @@
      (match (string.slice s 0 1)
        [";" (drop-whitespace (drop-comment s))]
        [c
-        (match (string.whitespace? c)
-          [#true (drop-whitespace (string.slice* s 1))]
-          [#false s])])]))
+        (if (string.whitespace? c)
+            (drop-whitespace (string.slice* s 1))
+            s)])]))
 
 (def (drop-comment s)
   (match s
@@ -153,15 +158,14 @@
 
 (def (read-list end s)
   (match (drop-whitespace s)
-    [s (match (= (ord end) (ord (string.slice s 0 1)))
-         [#true (VS (empty)
-                    (string.slice* s 1))]
-         [#false
-          (match (read s)
-            [(VS head s)
-             (match (read-list end s)
-               [(VS tail s)
-                (VS (cons head tail) s)])])])]))
+    [s (if (= (ord end) (ord (string.slice s 0 1)))
+           (VS (empty)
+               (string.slice* s 1))
+           (match (read s)
+             [(VS head s)
+              (match (read-list end s)
+                [(VS tail s)
+                 (VS (cons head tail) s)])]))]))
 
 (def (read-string s)
   (match (string.slice s 0 1)
@@ -197,33 +201,32 @@
     [s
      (match (string.slice s 0 1)
        [c
-        (match (symbol-char? c)
-          [#false (VS "" s)]
-          [#true (match (read-token (string.slice* s 1))
-                   [(VS t s)
-                    (VS (string.append c t)
-                        s)])])])]))
+        (if (not (symbol-char? c))
+            (VS "" s)
+            (match (read-token (string.slice* s 1))
+              [(VS t s)
+               (VS (string.append c t)
+                   s)]))])]))
 
 (def (convert-token t)
-  (match (andmap string.digit? (string.chars t))
-    ; non-signed integer literal
-    [#true (SelfQuoting (string->int t))]
-    [#false
-     (match (list (string.slice t 0 1)
-                  (andmap string.digit? (string.chars (string.slice* t 1)))
-                  (< 1 (string-length t)))
-       ; explicit positive integer literal
-       [(list "+" #true #true)  (SelfQuoting (string->int (string.slice* t 1)))]
-       ; negative integer literal
-       [(list "-" #true #true)  (SelfQuoting (- 0 (string->int (string.slice* t 1))))]
-       [otherwise
-        ; not an integer literal
-        (match t
-          ["#true" (SelfQuoting #true)]
-          ["#t" (SelfQuoting #true)]
-          ["#false" (SelfQuoting #false)]
-          ["#f" (SelfQuoting #false)]
-          [t t])])]))
+  (if (andmap string.digit? (string.chars t))
+      ; non-signed integer literal
+      (SelfQuoting (string->int t))
+      (match (list (string.slice t 0 1)
+                   (andmap string.digit? (string.chars (string.slice* t 1)))
+                   (< 1 (string-length t)))
+        ; explicit positive integer literal
+        [(list "+" #true #true)  (SelfQuoting (string->int (string.slice* t 1)))]
+        ; negative integer literal
+        [(list "-" #true #true)  (SelfQuoting (- 0 (string->int (string.slice* t 1))))]
+        [otherwise
+         ; not an integer literal
+         (match t
+           ["#true" (SelfQuoting #true)]
+           ["#t" (SelfQuoting #true)]
+           ["#false" (SelfQuoting #false)]
+           ["#f" (SelfQuoting #false)]
+           [t t])])))
 
 
 
@@ -231,9 +234,9 @@
   (rev-digits->int (map digit-value (reverse (string.chars s)))))
 
 (def (int->string n)
-  (match (< n 0)
-    [#true (string.append "-" (nat->string (- 0 n)))]
-    [#false (nat->string n)]))
+  (if (< n 0)
+      (string.append "-" (nat->string (- 0 n)))
+      (nat->string n)))
 
 (def (nat->string n)
   (match (string.append* (reverse (int->rev-digits n)))
@@ -310,21 +313,25 @@
     [sexpr (ToplevelExpr (parse-expr sexpr))]))
 
 (def (parse-expr sexpr)
-  (match (string? sexpr)
-    [#true  (parse-var sexpr)]
-    [#false
-     (match sexpr
-       [(SelfQuoting v)  (Quote v)]
-       [(list "error" (SelfQuoting msg))  (Error msg)]
-       [(cons "match" (cons scrutinee cases))  (Match (parse-expr scrutinee)
-                                                      (map parse-case cases))]
-       ; syntax sugar for "list"
-       [(list "list")  (parse-expr (list "empty"))]
-       [(cons "list" (cons x xs))  (parse-expr (list "cons" x (cons "list" xs)))]
+  (if (string? sexpr)
+      (parse-var sexpr)
+      (match sexpr
+        [(SelfQuoting v)  (Quote v)]
+        [(list "error" (SelfQuoting msg))  (Error msg)]
+        [(cons "match" (cons scrutinee cases))  (Match (parse-expr scrutinee)
+                                                       (map parse-case cases))]
+        [(list "if" test consq alt) (If (parse-expr test)
+                                        (parse-expr consq)
+                                        (parse-expr alt))]
 
-       ; function call case must come last
-       [(cons func args)  (Call (parse-expr func)
-                                (map parse-expr args))])]))
+        ; syntax sugar for "list"
+        [(list "list")  (parse-expr (list "empty"))]
+        [(cons "list" (cons x xs))  (parse-expr (list "cons" x (cons "list" xs)))]
+
+
+        ; function call case must come last
+        [(cons func args)  (Call (parse-expr func)
+                                 (map parse-expr args))])))
 
 (def (parse-var str)
   (match (string.split str ".")
@@ -338,17 +345,16 @@
                             (parse-expr expr))]))
 
 (def (parse-pat sexpr)
-  (match (string? sexpr)
-    [#true  (PatHole sexpr)]
-    [#false
-     (match sexpr
-       [(SelfQuoting v)  (PatLitr v)]
+  (if (string? sexpr)
+      (PatHole sexpr)
+      (match sexpr
+        [(SelfQuoting v)  (PatLitr v)]
 
-       ; syntax sugar for "list"
-       [(list "list") (parse-pat (list "empty"))]
-       [(cons "list" (cons x xs)) (parse-pat (list "cons" x (cons "list" xs)))]
+        ; syntax sugar for "list"
+        [(list "list") (parse-pat (list "empty"))]
+        [(cons "list" (cons x xs)) (parse-pat (list "cons" x (cons "list" xs)))]
 
-       [(cons ctor args) (PatCtor (parse-expr ctor) (map parse-pat args))])]))
+        [(cons ctor args) (PatCtor (parse-expr ctor) (map parse-pat args))])))
 
 
 ; TODO validate ...
@@ -553,14 +559,13 @@
       (gen-pat-args scrut (+ 1 idx) pats))]))
 
 (def (emit-quoted-constant v)
-  (match (string? v)
-    [#true (emit-quoted-string v)]
-    [#false
-     (match (int? v)
-       [#true (emit-int v)]
-       [#false
-        (match (boolean? v)
-          [#true (emit-bool v)])])]))
+  (if (string? v)
+      (emit-quoted-string v)
+      (if (int? v)
+          (emit-int v)
+          (if (boolean? v)
+              (emit-bool v)
+              (match v)))))
 
 (def (emit-quoted-string s)
   ; emit a JS expression that evaluates to the same string as s.
@@ -586,9 +591,9 @@
   (string.append* (list "bigInt(" (emit-quoted-string (int->string v)) ")")))
 
 (def (emit-bool b)
-  (match b
-    [#true "true"]
-    [#false "false"]))
+  (if b
+      "true"
+      "false"))
 
 (def (emit-call func args)
   ; func and args are already JS expressions (strings).
@@ -616,10 +621,9 @@
   (match c
     ["-" "_"]
     [c
-     (match (string.alphanumeric? c)
-       [#true c]
-       [#false
-        (string.append* (list "$" (int->string (ord c)) "$"))])]))
+     (if (string.alphanumeric? c)
+         c
+         (string.append* (list "$" (int->string (ord c)) "$")))]))
 
 (def (emit-error msg)
   (string.append*
