@@ -2,11 +2,7 @@
 
 (def mod int.mod)
 
-(def and3 bool.and3)
 (def not bool.not)
-(def or3 bool.or3)
-(def or4 bool.or4)
-(def or5 bool.or5)
 
 (def empty list.empty)
 (def cons list.cons)
@@ -40,6 +36,10 @@
   (Match test
          (list (Case (PatLitr #true) consq)
                (Case (PatLitr #false) alt))))
+(def (And x y)
+  (If x y (Quote #false)))
+(def (Or x y)
+  (If x (Quote #true) y))
 
 ; case - one arm of a match expression
 (struct (Case pat expr))
@@ -266,27 +266,27 @@
            (int->rev-digits (/ n 10)))]))
 
 (def (symbol-char? c)
-  (and3 (string.graphical? c)
-        (not (delimiter? c))
-        (not (unsupported? c))))
+  (and (string.graphical? c)
+       (not (delimiter? c))
+       (not (unsupported? c))))
 
 (def (delimiter? c)
-  (or3 (string.whitespace? c)
-       (paren? c)
-       (= (ord c) (ord ";"))))
+  (or (string.whitespace? c)
+      (paren? c)
+      (= (ord c) (ord ";"))))
 
 (def (paren? c)
-  (or4 (= (ord c) (ord "("))
-       (= (ord c) (ord ")"))
-       (= (ord c) (ord "["))
-       (= (ord c) (ord "]"))))
+  (or (= (ord c) (ord "("))
+      (= (ord c) (ord ")"))
+      (= (ord c) (ord "["))
+      (= (ord c) (ord "]"))))
 
 (def (unsupported? c)
-  (or5 (= (ord c) (ord "\\"))
-       (= (ord c) (ord "|"))
-       (= (ord c) (ord ","))
-       (= (ord c) (ord "\""))
-       (= (ord c) (ord "`"))))
+  (or (= (ord c) (ord "\\"))
+      (= (ord c) (ord "|"))
+      (= (ord c) (ord ","))
+      (= (ord c) (ord "\""))
+      (= (ord c) (ord "`"))))
 
 
 
@@ -323,6 +323,8 @@
         [(list "if" test consq alt) (If (parse-expr test)
                                         (parse-expr consq)
                                         (parse-expr alt))]
+        [(cons "and" xs) (list.foldr And (Quote #true) (map parse-expr xs))]
+        [(cons "or" xs) (list.foldr Or (Quote #false) (map parse-expr xs))]
 
         ; syntax sugar for "list"
         [(list "list")  (parse-expr (list "empty"))]

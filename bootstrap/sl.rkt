@@ -35,8 +35,8 @@ Non-Goal: correctness for programs other than compiler.sl
                      ; if: sugar for match #true #false
                      [sl:if if]
                      ; short-circuiting and, or: sugar for repeated sl:if
-                     ;;[sl:and and]
-                     ;;[sl:or or]
+                     [sl:and and]
+                     [sl:or or]
                      )
 
 
@@ -88,6 +88,8 @@ Non-Goal: correctness for programs other than compiler.sl
          (write-string " " port)
          (sl-print a port))
        (write-string ")" port))]))
+(module+ util
+  (provide sl-print))
 
 (define-syntax-rule (sl:#%module-begin forms ...)
   (#%module-begin
@@ -176,3 +178,15 @@ Non-Goal: correctness for programs other than compiler.sl
   (sl:match test
             [#true consq]
             [#false alt]))
+(define-syntax sl:and
+  (syntax-rules ()
+    [(_) #true]
+    [(_ x xs ...) (sl:if x
+                         (sl:and xs ...)
+                         #false)]))
+(define-syntax sl:or
+  (syntax-rules ()
+    [(_) #false]
+    [(_ x xs ...) (sl:if x
+                         #true
+                         (sl:or xs ...))]))

@@ -86,3 +86,8 @@
     [(empty) base]
     [(cons x xs) (set-union (set-add base x)
                             xs)]))
+
+(def (foldr f init lst)
+  (match lst
+    [(empty) init]
+    [(cons x xs) (f x (foldr f init xs))]))

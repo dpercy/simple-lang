@@ -4,11 +4,9 @@
 ; TODO this style of "import" is bad because it makes it look like
 ; string.sl is defining all these operations.
 ; or maybe I just need to be more explicit about exports?
-(def <= int.<=)
-
-(def and2 bool.and2)
-(def or2 bool.or2)
 (def not bool.not)
+
+(def <= int.<=)
 
 (def empty list.empty)
 (def cons list.cons)
@@ -73,8 +71,8 @@
        [start
         (match (ord end)
           [end
-           (and2 (<= start c)
-                 (<= c end))])])]))
+           (and (<= start c)
+                (<= c end))])])]))
 
 (def (ascii? c)
   ; ascii characters are 7 bits.
@@ -91,25 +89,25 @@
   (char-in-range? c "a" "z"))
 
 (def (alpha? c)
-  (or2 (uppercase? c)
-       (lowercase? c)))
+  (or (uppercase? c)
+      (lowercase? c)))
 
 (def (alphanumeric? c)
-  (or2 (digit? c)
-       (alpha? c)))
+  (or (digit? c)
+      (alpha? c)))
 
 (def (whitespace? c)
   ; http://www.cplusplus.com/reference/cctype/isspace/
-  (or2 (= (ord c) (ord " "))
-       (char-in-range? c "\t" "\r")))
+  (or (= (ord c) (ord " "))
+      (char-in-range? c "\t" "\r")))
 
 (def (printable? c)
   (char-in-range? c " " "~"))
 
 (def (graphical? c)
-  (and2 (printable? c)
-        (not (= (ord c) (ord " ")))))
+  (and (printable? c)
+       (not (= (ord c) (ord " ")))))
 
 (def (punctuation? c)
-  (and2 (graphical? c)
-        (not (alphanumeric? c))))
+  (and (graphical? c)
+       (not (alphanumeric? c))))
