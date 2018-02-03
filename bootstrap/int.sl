@@ -1,6 +1,14 @@
 #lang s-exp "sl.rkt"
 
+(def (int? v) (primitives.int? v))
 
+(def (+ x y) (primitives.+ x y))
+(def (- x y) (primitives.- x y))
+(def (* x y) (primitives.* x y))
+(def (/ x y) (primitives./ x y))
+
+(def (< x y) (primitives.< x y))
+(def (= x y) (primitives.= x y))
 
 (def (> x y)
   (< y x))

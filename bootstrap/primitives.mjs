@@ -18,6 +18,10 @@ export function show(v) {
         if ($int$63$(v)) {
             return v.toString();
         }
+        if (!v.constructor.schemeName) {
+            // If the object's class has no schemeName, it must be a raw JS object.
+            return showRaw(v);
+        }
 
         // TODO simplify by giving each struct a toString
         let s = '(' + v.constructor.schemeName;

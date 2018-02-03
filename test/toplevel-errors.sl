@@ -5,4 +5,4 @@
 456
 
 ; but it does necessarily break things that relied on that value
-(+ x 1)
+(primitives.+ x 1)

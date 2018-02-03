@@ -16,26 +16,26 @@
 
 ; re-export this prim
 (def (length s)
-  (string-length s))
+  (primitives.string-length s))
 
 ; re-export this prim
 (def (append s1 s2)
-  (string-append s1 s2))
+  (primitives.string-append s1 s2))
 
 (def (append* strings)
   (match strings
     [(empty) ""]
-    [(cons s ss) (string-append s (append* ss))]))
+    [(cons s ss) (append s (append* ss))]))
 
 (def (chars s)
   (match s
     ["" (empty)]
-    [s (cons (substring s 0 1)
+    [s (cons (slice s 0 1)
              (chars (slice* s 1)))]))
 
 ; re-export this prim
 (def (slice s start end)
-  (substring s start end))
+  (primitives.substring s start end))
 
 (def (slice* s start)
   (slice s start (length s)))
@@ -45,8 +45,8 @@
   ; the string must be at least as long as the prefix
   (if (<= (length prefix)
           (length s))
-      (string=? prefix
-                (substring s 0 (length prefix)))
+      (primitives.string=? prefix
+                           (slice s 0 (length prefix)))
       #false))
 
 (def (split s sep)
@@ -60,8 +60,8 @@
         ; when (list "x" "") would make more sense.
         ["" (list "")]
         [s (match (split (slice* s 1) sep)
-             [(cons x xs) (cons (string-append (substring s 0 1)
-                                               x)
+             [(cons x xs) (cons (primitives.string-append (slice s 0 1)
+                                                          x)
                                 xs)])])))
 
 
@@ -78,10 +78,14 @@
            (and (<= start c)
                 (<= c end))])])]))
 
+; re-export these prims
+(def (ord c) (primitives.ord c))
+(def (chr c) (primitives.chr c))
+
 (def (ascii? c)
   ; ascii characters are 7 bits.
   ; 128 is 1000 0000, the smallest number with its 8th bit set.
-  (< (ord c) 128))
+  (int.< (ord c) 128))
 
 (def (digit? c)
   (char-in-range? c "0" "9"))
@@ -102,7 +106,7 @@
 
 (def (whitespace? c)
   ; http://www.cplusplus.com/reference/cctype/isspace/
-  (or (= (ord c) (ord " "))
+  (or (int.= (ord c) (ord " "))
       (char-in-range? c "\t" "\r")))
 
 (def (printable? c)
@@ -110,7 +114,7 @@
 
 (def (graphical? c)
   (and (printable? c)
-       (not (= (ord c) (ord " ")))))
+       (not (int.= (ord c) (ord " ")))))
 
 (def (punctuation? c)
   (and (graphical? c)

@@ -12,6 +12,10 @@
 (def set-union list.set-union)
 (def length list.length)
 
+(def string? primitives.string?)
+(def int? primitives.int?)
+(def boolean? primitives.boolean?)
+
 
 ; statements
 (struct (DefVal name expr))
@@ -131,7 +135,7 @@
        [c
         (if (symbol-char? c)
             (read-symbol-or-int s)
-            (if (= (ord c) (ord "\""))
+            (if (int.= (string.ord c) (string.ord "\""))
                 (match (read-string (string.slice* s 1))
                   [(VS t s) (VS (SelfQuoting t) s)])
                 ; hack for error reporting: (match c) complains about the value c
@@ -158,7 +162,7 @@
 
 (def (read-list end s)
   (match (drop-whitespace s)
-    [s (if (= (ord end) (ord (string.slice s 0 1)))
+    [s (if (int.= (string.ord end) (string.ord (string.slice s 0 1)))
            (VS (empty)
                (string.slice* s 1))
            (match (read s)
@@ -214,11 +218,11 @@
       (SelfQuoting (string->int t))
       (match (list (string.slice t 0 1)
                    (andmap string.digit? (string.chars (string.slice* t 1)))
-                   (< 1 (string.length t)))
+                   (int.< 1 (string.length t)))
         ; explicit positive integer literal
         [(list "+" #true #true)  (SelfQuoting (string->int (string.slice* t 1)))]
         ; negative integer literal
-        [(list "-" #true #true)  (SelfQuoting (- 0 (string->int (string.slice* t 1))))]
+        [(list "-" #true #true)  (SelfQuoting (int.- 0 (string->int (string.slice* t 1))))]
         [otherwise
          ; not an integer literal
          (match t
@@ -234,8 +238,8 @@
   (rev-digits->int (map digit-value (reverse (string.chars s)))))
 
 (def (int->string n)
-  (if (< n 0)
-      (string.append "-" (nat->string (- 0 n)))
+  (if (int.< n 0)
+      (string.append "-" (nat->string (int.- 0 n)))
       (nat->string n)))
 
 (def (nat->string n)
@@ -246,24 +250,24 @@
     [s s]))
 
 (def (digit-value c)
-  (- (ord c) (ord "0")))
+  (int.- (string.ord c) (string.ord "0")))
 
 (def (digit val)
-  (chr (+ val (ord "0"))))
+  (string.chr (int.+ val (string.ord "0"))))
 
 (def (rev-digits->int revdigits)
   (match revdigits
     [(empty) 0]
     [(cons lowdigit higherdigits)
-     (+ (* 10 (rev-digits->int higherdigits))
-        lowdigit)]))
+     (int.+ (int.* 10 (rev-digits->int higherdigits))
+            lowdigit)]))
 
 (def (int->rev-digits n)
   (match n
     [0 (empty)]
     [n
      (cons (digit (mod n 10))
-           (int->rev-digits (/ n 10)))]))
+           (int->rev-digits (int./ n 10)))]))
 
 (def (symbol-char? c)
   (and (string.graphical? c)
@@ -273,20 +277,20 @@
 (def (delimiter? c)
   (or (string.whitespace? c)
       (paren? c)
-      (= (ord c) (ord ";"))))
+      (int.= (string.ord c) (string.ord ";"))))
 
 (def (paren? c)
-  (or (= (ord c) (ord "("))
-      (= (ord c) (ord ")"))
-      (= (ord c) (ord "["))
-      (= (ord c) (ord "]"))))
+  (or (int.= (string.ord c) (string.ord "("))
+      (int.= (string.ord c) (string.ord ")"))
+      (int.= (string.ord c) (string.ord "["))
+      (int.= (string.ord c) (string.ord "]"))))
 
 (def (unsupported? c)
-  (or (= (ord c) (ord "\\"))
-      (= (ord c) (ord "|"))
-      (= (ord c) (ord ","))
-      (= (ord c) (ord "\""))
-      (= (ord c) (ord "`"))))
+  (or (int.= (string.ord c) (string.ord "\\"))
+      (int.= (string.ord c) (string.ord "|"))
+      (int.= (string.ord c) (string.ord ","))
+      (int.= (string.ord c) (string.ord "\""))
+      (int.= (string.ord c) (string.ord "`"))))
 
 
 
@@ -395,8 +399,9 @@
 (def (prelude)
   (string.append*
    (list
-    "import { toplevel, bigInt, isA, "
-    (commas (map emit-name prelude-names))
+    "import { toplevel, bigInt, isA, $equal$63$ as matchEqual, "
+    ; TODO rename this function?
+    ;;(commas (map emit-name prelude-names))
     " } from \"./primitives.mjs\";\n")))
 
 (def (gen-import modname)
@@ -476,7 +481,7 @@
        "] = "
        p
        ";\n"
-       (emit-constructor-body params (+ idx 1))))]))
+       (emit-constructor-body params (int.+ idx 1))))]))
 
 (def (wrap-check-undefined name js-expr)
   ; TODO try something more like "fixing letrec", or dep-graph sorting, for efficiency
@@ -537,7 +542,7 @@
     [(PatLitr v)
      (string.append*
       (list
-       "if (!$equal$63$(" scrut ", " (emit-quoted-constant v) ")) break;\n"
+       "if (!matchEqual(" scrut ", " (emit-quoted-constant v) ")) break;\n"
        ;;
        ))]
     [(PatCtor ctor args)
@@ -558,7 +563,7 @@
     [(cons pat pats)
      (string.append
       (gen-pat (string.append* (list scrut "[" (int->string idx) "]")) pat)
-      (gen-pat-args scrut (+ 1 idx) pats))]))
+      (gen-pat-args scrut (int.+ 1 idx) pats))]))
 
 (def (emit-quoted-constant v)
   (if (string? v)
@@ -625,7 +630,7 @@
     [c
      (if (string.alphanumeric? c)
          c
-         (string.append* (list "$" (int->string (ord c)) "$")))]))
+         (string.append* (list "$" (int->string (string.ord c)) "$")))]))
 
 (def (emit-error msg)
   (string.append*

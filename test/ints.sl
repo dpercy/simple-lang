@@ -1,3 +1,10 @@
+(def + primitives.+)
+(def * primitives.*)
+(def / primitives./)
+(def - primitives.-)
+(def < primitives.<)
+(def = primitives.=)
+
 123
 4294967296 ; 2^32
 (+ 1 4294967296)

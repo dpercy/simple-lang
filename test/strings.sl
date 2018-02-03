@@ -1,3 +1,6 @@
+(def ord primitives.ord)
+(def chr primitives.chr)
+(def string-length primitives.string-length)
 (ord " ")
 (ord "A")
 (chr 32)

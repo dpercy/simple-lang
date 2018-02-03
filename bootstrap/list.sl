@@ -15,26 +15,26 @@
 (def (length lst)
   (match lst
     [(empty) 0]
-    [(cons x xs) (+ 1 (length xs))]))
+    [(cons x xs) (int.+ 1 (length xs))]))
 
 (def (list-ref lst i)
   (match i
     [0 (first lst)]
-    [i (list-ref (rest lst) (- i 1))]))
+    [i (list-ref (rest lst) (int.- i 1))]))
 
 (def (take n lst)
   (match n
     [0 (empty)]
     [i (match lst
          [(empty) (error "take: ran out of elements")]
-         [(cons x xs) (cons x (take (- n 1) xs))])]))
+         [(cons x xs) (cons x (take (int.- n 1) xs))])]))
 
 (def (drop n lst)
   (match n
     [0 lst]
     [n (match lst
          [(empty) (error "drop: ran out of elements")]
-         [(cons x xs) (drop (- n 1) xs)])]))
+         [(cons x xs) (drop (int.- n 1) xs)])]))
 
 (def (map f lst)
   (match lst
@@ -72,7 +72,7 @@
 (def (contains? lst item)
   (match lst
     [(empty) #false]
-    [(cons x xs) (if (equal? item x)
+    [(cons x xs) (if (primitives.equal? item x)
                      #true
                      (contains? xs item))]))
 

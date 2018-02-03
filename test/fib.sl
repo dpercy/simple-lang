@@ -1,6 +1,10 @@
 #lang s-exp "../bootstrap/sl.rkt"
 
 
+(def < primitives.<)
+(def + primitives.+)
+(def - primitives.-)
+
 (def (fib n)
   (match (< n 2)
     [#true n]
