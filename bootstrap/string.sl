@@ -15,6 +15,10 @@
 ; These let you reuse nats and lists to specify strings.
 
 ; re-export this prim
+(def (length s)
+  (string-length s))
+
+; re-export this prim
 (def (append s1 s2)
   (string-append s1 s2))
 
@@ -34,20 +38,20 @@
   (substring s start end))
 
 (def (slice* s start)
-  (slice s start (string-length s)))
+  (slice s start (length s)))
 
 (def (startswith? s prefix)
   ; TODO use and
   ; the string must be at least as long as the prefix
-  (if (<= (string-length prefix)
-          (string-length s))
+  (if (<= (length prefix)
+          (length s))
       (string=? prefix
-                (substring s 0 (string-length prefix)))
+                (substring s 0 (length prefix)))
       #false))
 
 (def (split s sep)
   (if (startswith? s sep)
-      (cons "" (split (slice* s (string-length sep))
+      (cons "" (split (slice* s (length sep))
                       sep))
       (match s
         ; This is Python's take on split--

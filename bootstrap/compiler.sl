@@ -214,7 +214,7 @@
       (SelfQuoting (string->int t))
       (match (list (string.slice t 0 1)
                    (andmap string.digit? (string.chars (string.slice* t 1)))
-                   (< 1 (string-length t)))
+                   (< 1 (string.length t)))
         ; explicit positive integer literal
         [(list "+" #true #true)  (SelfQuoting (string->int (string.slice* t 1)))]
         ; negative integer literal
