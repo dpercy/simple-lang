@@ -16,18 +16,6 @@
 (def set-union list.set-union)
 (def length list.length)
 
-; TODO design libraries for qualified use, like in Go:
-;  - not "string.string-append" but "string.append" or even "string.++"
-;  - not "string.substring" but "string.slice"
-(def substring* string.substring*)
-(def whitespace? string.whitespace?)
-(def digit? string.digit?)
-(def string-chars string.string-chars) ; explode?
-(def string-append* string.string-append*)
-(def graphical? string.graphical?)
-(def alphanumeric? string.alphanumeric?)
-(def replace-suffix string.replace-suffix)
-
 
 ; statements
 (struct (DefVal name expr))
@@ -131,15 +119,15 @@
 (def (read s) ; -> (VS one-s-expression remaining-string)
   (match (drop-whitespace s)
     [s
-     (match (substring s 0 1)
-       ["(" (read-list ")" (substring* s 1))]
-       ["[" (read-list "]" (substring* s 1))]
+     (match (string.slice s 0 1)
+       ["(" (read-list ")" (string.slice* s 1))]
+       ["[" (read-list "]" (string.slice* s 1))]
        [c
         (match (symbol-char? c)
           [#true (read-symbol-or-int s)]
           [#false
            (match (= (ord c) (ord "\""))
-             [#true (match (read-string (substring* s 1))
+             [#true (match (read-string (string.slice* s 1))
                       [(VS t s) (VS (SelfQuoting t) s)])]
              ; hack for error reporting: (match c) complains about the value c
              [#false (match c)])])])]))
@@ -148,26 +136,26 @@
   (match s
     ["" ""]
     [s
-     (match (substring s 0 1)
+     (match (string.slice s 0 1)
        [";" (drop-whitespace (drop-comment s))]
        [c
-        (match (whitespace? c)
-          [#true (drop-whitespace (substring* s 1))]
+        (match (string.whitespace? c)
+          [#true (drop-whitespace (string.slice* s 1))]
           [#false s])])]))
 
 (def (drop-comment s)
   (match s
     ["" ""]
     [s
-     (match (substring s 0 1)
-       ["\n" (substring* s 1)]
-       [c (drop-comment (substring* s 1))])]))
+     (match (string.slice s 0 1)
+       ["\n" (string.slice* s 1)]
+       [c (drop-comment (string.slice* s 1))])]))
 
 (def (read-list end s)
   (match (drop-whitespace s)
-    [s (match (= (ord end) (ord (substring s 0 1)))
+    [s (match (= (ord end) (ord (string.slice s 0 1)))
          [#true (VS (empty)
-                    (substring* s 1))]
+                    (string.slice* s 1))]
          [#false
           (match (read s)
             [(VS head s)
@@ -176,15 +164,15 @@
                 (VS (cons head tail) s)])])])]))
 
 (def (read-string s)
-  (match (substring s 0 1)
-    ["\"" (VS "" (substring* s 1))]
-    ["\\" (read-string/escape (substring* s 1))]
+  (match (string.slice s 0 1)
+    ["\"" (VS "" (string.slice* s 1))]
+    ["\\" (read-string/escape (string.slice* s 1))]
     ["\n" (error "multiline strings are not supported")]
-    [c (match (read-string (substring* s 1))
-         [(VS t s) (VS (string-append c t) s)])]))
+    [c (match (read-string (string.slice* s 1))
+         [(VS t s) (VS (string.append c t) s)])]))
 
 (def (read-string/escape s)
-  (match (match (substring s 0 1)
+  (match (match (string.slice s 0 1)
            ; keep me in sync with char-escape,
            ; and with primitives.mjs showString...
            ["0" "\0"]
@@ -195,8 +183,8 @@
            ["\\" "\\"]
            ;[c (error "unrecognized escape")]
            )
-    [c (match (read-string (substring* s 1))
-         [(VS t s) (VS (string-append c t) s)])]))
+    [c (match (read-string (string.slice* s 1))
+         [(VS t s) (VS (string.append c t) s)])]))
 
 
 (def (read-symbol-or-int s)
@@ -207,27 +195,27 @@
   (match s
     ["" (VS "" s)]
     [s
-     (match (substring s 0 1)
+     (match (string.slice s 0 1)
        [c
         (match (symbol-char? c)
           [#false (VS "" s)]
-          [#true (match (read-token (substring* s 1))
+          [#true (match (read-token (string.slice* s 1))
                    [(VS t s)
-                    (VS (string-append c t)
+                    (VS (string.append c t)
                         s)])])])]))
 
 (def (convert-token t)
-  (match (andmap digit? (string-chars t))
+  (match (andmap string.digit? (string.chars t))
     ; non-signed integer literal
     [#true (SelfQuoting (string->int t))]
     [#false
-     (match (list (substring t 0 1)
-                  (andmap digit? (string-chars (substring* t 1)))
+     (match (list (string.slice t 0 1)
+                  (andmap string.digit? (string.chars (string.slice* t 1)))
                   (< 1 (string-length t)))
        ; explicit positive integer literal
-       [(list "+" #true #true)  (SelfQuoting (string->int (substring* t 1)))]
+       [(list "+" #true #true)  (SelfQuoting (string->int (string.slice* t 1)))]
        ; negative integer literal
-       [(list "-" #true #true)  (SelfQuoting (- 0 (string->int (substring* t 1))))]
+       [(list "-" #true #true)  (SelfQuoting (- 0 (string->int (string.slice* t 1))))]
        [otherwise
         ; not an integer literal
         (match t
@@ -240,15 +228,15 @@
 
 
 (def (string->int s)
-  (rev-digits->int (map digit-value (reverse (string-chars s)))))
+  (rev-digits->int (map digit-value (reverse (string.chars s)))))
 
 (def (int->string n)
   (match (< n 0)
-    [#true (string-append "-" (nat->string (- 0 n)))]
+    [#true (string.append "-" (nat->string (- 0 n)))]
     [#false (nat->string n)]))
 
 (def (nat->string n)
-  (match (string-append* (reverse (int->rev-digits n)))
+  (match (string.append* (reverse (int->rev-digits n)))
     ; An "empty int literal" isn't a thing,
     ; so replace it with zero.
     ["" "0"]
@@ -275,12 +263,12 @@
            (int->rev-digits (/ n 10)))]))
 
 (def (symbol-char? c)
-  (and3 (graphical? c)
+  (and3 (string.graphical? c)
         (not (delimiter? c))
         (not (unsupported? c))))
 
 (def (delimiter? c)
-  (or3 (whitespace? c)
+  (or3 (string.whitespace? c)
        (paren? c)
        (= (ord c) (ord ";"))))
 
@@ -339,7 +327,7 @@
                                 (map parse-expr args))])]))
 
 (def (parse-var str)
-  (match (string.string-split str ".")
+  (match (string.split str ".")
     [(list name) (Var name)]
     [(list modname name) (Global modname name)]
     [parts (error "identifier has too many dots")]))
@@ -370,10 +358,10 @@
 
 (def (gen-program stmts)
   ; generate a sequence of JS statements, as one string
-  (string-append* (list
+  (string.append* (list
                    (prelude)
-                   (string-append* (map gen-import (find-imports stmts)))
-                   (string-append* (map gen-stmt stmts)))))
+                   (string.append* (map gen-import (find-imports stmts)))
+                   (string.append* (map gen-stmt stmts)))))
 
 (def prelude-names
   (list
@@ -397,17 +385,17 @@
    ))
 
 (def (prelude)
-  (string-append*
+  (string.append*
    (list
     "import { toplevel, bigInt, isA, "
     (commas (map emit-name prelude-names))
     " } from \"./primitives.mjs\";\n")))
 
 (def (gen-import modname)
-  (string-append*
+  (string.append*
    (list
     "import * as " (emit-name modname)
-    " from " (emit-quoted-string (string-append* (list "./" modname ".mjs")))
+    " from " (emit-quoted-string (string.append* (list "./" modname ".mjs")))
     ";\n")))
 
 (def (find-imports form)
@@ -424,15 +412,15 @@
   ; generate a JS statement, as a string
   (match stmt
     [(ToplevelExpr e)
-     (string-append* (list "toplevel(false, () => " (gen-expr e) ");\n"))]
-    [(DefVal name e) (string-append*
+     (string.append* (list "toplevel(false, () => " (gen-expr e) ");\n"))]
+    [(DefVal name e) (string.append*
                       (list
                        "export const "
                        (emit-name name)
                        " = toplevel("
                        (emit-quoted-string name)
                        ", () => " (gen-expr e) ");\n"))]
-    [(DefFun name params body) (string-append*
+    [(DefFun name params body) (string.append*
                                 (list
                                  "export function "
                                  (emit-name name)
@@ -448,7 +436,7 @@
     [(DefStruct name params)
      (match (cons name (map emit-name (cons name params)))
        [(cons orig-name (cons name params))
-        (string-append*
+        (string.append*
          (list
           "export function " name "(" (commas params) ") {\n"
           ; Arity check before `this` check,
@@ -460,10 +448,10 @@
           name ".schemeName = " (emit-quoted-string orig-name) ";\n"))])]))
 
 (def (emit-arity-check name expected-num-args)
-  (string-append*
+  (string.append*
    (list
     "  if (arguments.length !== " (int->string expected-num-args) ")"
-    " throw (" (emit-quoted-string (string-append* (list name
+    " throw (" (emit-quoted-string (string.append* (list name
                                                          ": expected "
                                                          (int->string expected-num-args)
                                                          " arguments, but got ")))
@@ -473,7 +461,7 @@
   (match params
     [(empty) ""]
     [(cons p params)
-     (string-append*
+     (string.append*
       (list
        "  this["
        (int->string idx)
@@ -484,11 +472,11 @@
 
 (def (wrap-check-undefined name js-expr)
   ; TODO try something more like "fixing letrec", or dep-graph sorting, for efficiency
-  (string-append* (list
+  (string.append* (list
                    "(undefined === "
                    js-expr
                    "?"
-                   (gen-expr (Error (string-append*
+                   (gen-expr (Error (string.append*
                                      (list name " is not defined"))))
                    ":"
                    js-expr
@@ -501,17 +489,17 @@
     [(Var name) (wrap-check-undefined name (emit-name name))]
     [(Global mod name) (wrap-check-undefined
                         name
-                        (string-append*
+                        (string.append*
                          (list (emit-name mod) "." (emit-name name))))]
     [(Error msg) (emit-error msg)]
     [(Call func args) (emit-call (gen-expr func)
                                  (map gen-expr args))]
     [(Match scrut cases)
-     (string-append*
+     (string.append*
       (list
        "( (() => {\n"
        "const scrut = " (gen-expr scrut) ";\n"
-       (string-append* (map gen-case cases))
+       (string.append* (map gen-case cases))
 
        (gen-expr (Error "match: no case matched")) ";\n"
 
@@ -520,7 +508,7 @@
 (def (gen-case case)
   (match case
     [(Case pat expr)
-     (string-append*
+     (string.append*
       (list
        ; The whole case is wrapped in a do{}while(0),
        ; so whenever a pattern fails you can use `break` to jump to the next case.
@@ -533,13 +521,13 @@
 (def (gen-pat scrut pat)
   (match pat
     [(PatHole name)
-     (string-append*
+     (string.append*
       (list
        "const " (emit-name name) " = " scrut ";\n"
        ;;
        ))]
     [(PatLitr v)
-     (string-append*
+     (string.append*
       (list
        "if (!$equal$63$(" scrut ", " (emit-quoted-constant v) ")) break;\n"
        ;;
@@ -549,7 +537,7 @@
      ; - instead, compile a pattern into 2 phases:
      ;   1. a check phase: one big "&&" expression on "scrut[1][0][2]" paths
      ;   2. a bind phase: sequence of "const x = ..." statements
-     (string-append*
+     (string.append*
       (list
        "if (!(isA(" scrut ", " (int->string (length args)) ", " (gen-expr ctor) "))) break;\n"
        (gen-pat-args scrut 0 args)
@@ -560,8 +548,8 @@
   (match pats
     [(empty) ""]
     [(cons pat pats)
-     (string-append
-      (gen-pat (string-append* (list scrut "[" (int->string idx) "]")) pat)
+     (string.append
+      (gen-pat (string.append* (list scrut "[" (int->string idx) "]")) pat)
       (gen-pat-args scrut (+ 1 idx) pats))]))
 
 (def (emit-quoted-constant v)
@@ -577,8 +565,8 @@
 (def (emit-quoted-string s)
   ; emit a JS expression that evaluates to the same string as s.
   ; for now, escapes are not supported!
-  (string-append* (list "\""
-                        (string-append* (map char-escape (string-chars s)))
+  (string.append* (list "\""
+                        (string.append* (map char-escape (string.chars s)))
                         "\"")))
 
 (def (char-escape c)
@@ -595,7 +583,7 @@
 
 (def (emit-int v)
   ; represent ints as bigInt instances
-  (string-append* (list "bigInt(" (emit-quoted-string (int->string v)) ")")))
+  (string.append* (list "bigInt(" (emit-quoted-string (int->string v)) ")")))
 
 (def (emit-bool b)
   (match b
@@ -604,7 +592,7 @@
 
 (def (emit-call func args)
   ; func and args are already JS expressions (strings).
-  (string-append*
+  (string.append*
    (list func
          "("
          (commas args)
@@ -614,7 +602,7 @@
   (match strings
     [(empty) ""]
     [(list last) last]
-    [(cons x xs) (string-append* (list x ", " (commas xs)))]))
+    [(cons x xs) (string.append* (list x ", " (commas xs)))]))
 
 (def (emit-name name)
   ; 1. prefix all generated names with $. this ensures:
@@ -622,19 +610,19 @@
   ;   - no generated name collides with a keyword
   ;   - any name not starting with a $ is reserved for the compiler
   ; 2. replace any non-alphanumeric character with an escape code
-  (string-append* (cons "$" (map identifier-char-escape (string-chars name)))))
+  (string.append* (cons "$" (map identifier-char-escape (string.chars name)))))
 
 (def (identifier-char-escape c)
   (match c
     ["-" "_"]
     [c
-     (match (alphanumeric? c)
+     (match (string.alphanumeric? c)
        [#true c]
        [#false
-        (string-append* (list "$" (int->string (ord c)) "$"))])]))
+        (string.append* (list "$" (int->string (ord c)) "$"))])]))
 
 (def (emit-error msg)
-  (string-append*
+  (string.append*
    (list "( (() => { throw " (emit-quoted-string msg) "; })() )")))
 
 

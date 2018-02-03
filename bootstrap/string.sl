@@ -16,20 +16,27 @@
 ; The two essential string primitives are explode and implode.
 ; These let you reuse nats and lists to specify strings.
 
-(def (string-append* strings)
+; re-export this prim
+(def (append s1 s2)
+  (string-append s1 s2))
+
+(def (append* strings)
   (match strings
     [(empty) ""]
-    [(cons s ss) (string-append s (string-append* ss))]))
+    [(cons s ss) (string-append s (append* ss))]))
 
-(def (string-chars s)
+(def (chars s)
   (match s
     ["" (empty)]
     [s (cons (substring s 0 1)
-             (string-chars (substring* s 1)))]))
+             (chars (slice* s 1)))]))
 
-(def (substring* s start)
-  (substring s start (string-length s)))
+; re-export this prim
+(def (slice s start end)
+  (substring s start end))
 
+(def (slice* s start)
+  (slice s start (string-length s)))
 
 (def (startswith? s prefix)
   (match (<= (string-length prefix)
@@ -40,34 +47,25 @@
      (string=? prefix
                (substring s 0 (string-length prefix)))]))
 
-(def (replace-suffix s old new)
-  (match (- (string-length s) (string-length old))
-    [baselen
-     (match (substring* s (- (string-length s) (string-length old)))
-       [old-suffix
-        (match (string=? old-suffix old)
-          [#false (error "wrong suffix")]
-          [#true
-           (string-append (substring s 0 baselen)
-                          new)])])]))
-
-
-(def (string-split s sep)
+(def (split s sep)
   (match (startswith? s sep)
-    [#true (cons "" (string-split (substring* s (string-length sep))
-                                  sep))]
+    [#true (cons "" (split (slice* s (string-length sep))
+                           sep))]
     [#false (match s
-              ; This is Python's take on string-split--
-              ; another option is to say (string-split "" _) == (empty),
-              ; but that seems to imply  (string-split "x," ",") == (list "x")
+              ; This is Python's take on split--
+              ; another option is to say (split "" _) == (empty),
+              ; but that seems to imply  (split "x," ",") == (list "x")
               ; when (list "x" "") would make more sense.
               ["" (list "")]
-              [s (match (string-split (substring* s 1) sep)
+              [s (match (split (slice* s 1) sep)
                    [(cons x xs) (cons (string-append (substring s 0 1)
                                                      x)
                                       xs)])])]))
 
 
+; ascii table: https://www.unicode.org/charts/PDF/U0000.pdf
+
+; TODO move these to a "char" module? reads nicer: char.digit? vs string.digit?
 (def (char-in-range? c start end) ; inclusive
   (match (ord c)
     [c
@@ -77,9 +75,6 @@
           [end
            (and2 (<= start c)
                  (<= c end))])])]))
-
-
-; ascii table: https://www.unicode.org/charts/PDF/U0000.pdf
 
 (def (ascii? c)
   ; ascii characters are 7 bits.
