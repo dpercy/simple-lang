@@ -18,6 +18,7 @@
 
 
 ; statements
+(struct (LineNum num stmt))
 (struct (DefVal name expr))
 (struct (DefFun name params body))
 (struct (DefStruct name params))
@@ -72,6 +73,7 @@
                                    (core-fold empty-case append-case base-case forms))]
 
               ; statements
+              [(LineNum n stmt)  (core-fold empty-case append-case base-case stmt)]
               [(DefVal name expr)  (core-fold empty-case append-case base-case expr)]
               [(DefFun name params body)  (core-fold empty-case append-case base-case body)]
               [(DefStruct name params)  empty-case]
@@ -116,15 +118,44 @@
     [(empty) (error "no s-expressions in string")]
     [more (error "expected only one s-expression in string")]))
 
-(def (read-all s) ; list of s-exprs
+(def (read-all s)
+  (read-all* s (count-lines s)))
+
+(def (count-lines s)
+  ; We don't have loops or tail recursion yet,
+  ; so a foldl-shaped recursion would blow the stack.
+  ; To avoid that we use a binary-tree-shaped recursion instead.
+  (match (string.length s)
+    [0 0]
+    [1 (match s
+         ["\n" 1]
+         [_ 0])]
+    [len (match (int./ len 2)
+           [mid (int.+ (count-lines (string.slice s 0 mid))
+                       (count-lines (string.slice s mid len)))])]))
+
+(def (read-all* s initial-linecount) ; list of s-exprs
+  ; read-all also tracks the srcloc of each top-level form.
+  ; it does this by comparing the remaining string length after each read.
+
+  ; 1. skip over whitespace
   (match (drop-whitespace s)
     ["" (empty)]
     [s
-     (match (read s)
-       [(VS first s)
-        (match (read-all s)
-          [rest
-           (cons first rest)])])]))
+
+     ; 2. measure our new position.
+     ;    this is where the s-expr we're about to read starts.
+     (match (int.- initial-linecount (count-lines s))
+       [start-lineno
+
+        ; 3. read the s-expr
+        (match (read s)
+          [(VS first s)
+
+           ; 4. measure our new position to pass to read-all*
+           (match (read-all* s initial-linecount)
+             [rest
+              (cons (LineNum start-lineno first) rest)])])])]))
 
 (def (read s) ; -> (VS one-s-expression remaining-string)
   (match (drop-whitespace s)
@@ -311,6 +342,7 @@
 
 (def (parse-stmt sexpr)
   (match sexpr
+    [(LineNum n s) (LineNum n (parse-stmt s))]
     [(list "def" (cons name params) body) (DefFun name params (parse-expr body))]
     [(list "def" name expr) (DefVal name (parse-expr expr))]
     [(list "struct" (cons name params)) (DefStruct name params)]
@@ -424,15 +456,20 @@
 (def (gen-stmt stmt)
   ; generate a JS statement, as a string
   (match stmt
-    [(ToplevelExpr e)
-     (string.append* (list "toplevel(false, () => " (gen-expr e) ");\n"))]
-    [(DefVal name e) (string.append*
-                      (list
-                       "export const "
-                       (emit-name name)
-                       " = toplevel("
-                       (emit-quoted-string name)
-                       ", () => " (gen-expr e) ");\n"))]
+    [(LineNum n (ToplevelExpr e))
+     (string.append* (list "toplevel("
+                           "false, "
+                           (int->string n) ", "
+                           "() => " (gen-expr e) ");\n"))]
+    [(LineNum n (DefVal name e)) (string.append*
+                                  (list
+                                   "export const "
+                                   (emit-name name)
+                                   " = toplevel("
+                                   (emit-quoted-string name) ", "
+                                   (int->string n) ", "
+                                   "() => " (gen-expr e) ");\n"))]
+    [(LineNum n s) (gen-stmt s)]
     [(DefFun name params body) (string.append*
                                 (list
                                  "export function "

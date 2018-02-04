@@ -63,10 +63,10 @@ function showRaw(v) {
     return "(### RAW JS VALUE ### " + v + " ###)";
 }
 
-export function toplevel(name, computeValue) {
+export function toplevel(name, lineno, computeValue) {
     try {
     	const val = computeValue();
-        toplevelPrinter(name, val);
+        toplevelPrinter(name, lineno, val);
 	return val;
     } catch(e) {
         if (name) {
@@ -79,7 +79,7 @@ export function toplevel(name, computeValue) {
     }
 }
 
-var toplevelPrinter = function(name, val) {
+var toplevelPrinter = function(name, lineno, val) {
     // By default we only print expressions, not definitions.
     if (!name) {
         console.log(show(val));

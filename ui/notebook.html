@@ -122,11 +122,17 @@
   import { configureRuntime, show } from "./primitives.mjs";
 
   configureRuntime({
-    toplevelPrinter: function(name, val) {
+    toplevelPrinter: function(name, lineno, val) {
       const msg = name ? "(def " + name + " " + show(val) + ")" : show(val);
 
-      const output = document.getElementById('output');
-      output.innerText += msg + '\n';
+      // TODO create line widget instead
+      const div = document.createElement('div');
+      div.innerText = msg;
+      div.classList = 'result value';
+      
+      console.log('go?', lineno, div);
+      const w = editor.addLineWidget(lineno, div);
+      console.log('ok', w);
     },
   });
   
@@ -148,7 +154,17 @@
     scrollPastEnd: true,
     lineNumbers: true
   });
+  window.editor = editor;
   const filenameInput = document.getElementById('filename');
+
+  function clearLineWidgets() {
+    for (var i=0; i<editor.lineCount(); ++i) {
+      const li = editor.lineInfo(i);
+      for (const lw of (li.widgets || [])) {
+        lw.clear();
+      }
+    }
+  }
 
   editor.on('change', function() {
     const sourceText = editor.getValue();
@@ -156,7 +172,8 @@
       const jsText = $compile_program(sourceText);
       ///document.getElementById('output').innerText = jsText;
       const output = document.getElementById('output');
-      output.innerText = '';
+      output.innerText = jsText;
+      clearLineWidgets();
 
       // eval!
       // TODO need a way to reliably kill the process so it stops writing to the DOM
