@@ -55,3 +55,30 @@ Simplest thing that works:
 - add line numbers to read, parse
 - gen line numbers in calls to "toplevel"
 - let primitives.mjs read some global setting, on window, about how to print
+
+
+
+================================================================================
+
+I want to solve line numbers without adding tech debt.
+
+The problem is:
+the run-time behavior of a module is too fixed.
+The .mjs files are too imperative:
+they spit out values sequentially to console.log.
+
+I want the compiled .mjs files to assume a bit less.
+The runtime system needs more choice over what to do with the module.
+
+
+At a minimum, the runtime system needs to choose:
+- whether defvals get printed
+- what to do with line numbers
+- what to do with the strings we want to print
+
+Ideally I don't just want to expose a flag.
+Maybe I'll expose a hook.
+Would be neat to turn it rightside out: yield intermediate results?
+
+
+

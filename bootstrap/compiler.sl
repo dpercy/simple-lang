@@ -486,9 +486,9 @@
 (def (wrap-check-undefined name js-expr)
   ; TODO try something more like "fixing letrec", or dep-graph sorting, for efficiency
   (string.append* (list
-                   "(undefined === "
+                   "('undefined' === typeof("
                    js-expr
-                   "?"
+                   ")?"
                    (gen-expr (Error (string.append*
                                      (list name " is not defined"))))
                    ":"

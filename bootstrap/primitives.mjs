@@ -66,12 +66,7 @@ function showRaw(v) {
 export function toplevel(name, computeValue) {
     try {
     	const val = computeValue();
-	if (name) {
-            // TODO print definitions?
-            //console.log("(def " + name + " " + show(val) + ")");
-        } else {
-            console.log(show(val));
-        }
+        toplevelPrinter(name, val);
 	return val;
     } catch(e) {
         if (name) {
@@ -82,6 +77,17 @@ export function toplevel(name, computeValue) {
         }
 	return undefined;
     }
+}
+
+var toplevelPrinter = function(name, val) {
+    // By default we only print expressions, not definitions.
+    if (!name) {
+        console.log(show(val));
+    }
+};
+
+export function configureRuntime({ toplevelPrinter: tp }) {
+    toplevelPrinter = tp;
 }
 
 export function $boolean$63$(v) {

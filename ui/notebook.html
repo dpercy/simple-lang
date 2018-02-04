@@ -119,6 +119,16 @@
 <script src="vendor/scrollpastend.js"></script>
 <script type="module">
   import { $compile_program } from "./bootstrap/compiler.mjs";
+  import { configureRuntime, show } from "./primitives.mjs";
+
+  configureRuntime({
+    toplevelPrinter: function(name, val) {
+      const msg = name ? "(def " + name + " " + show(val) + ")" : show(val);
+
+      const output = document.getElementById('output');
+      output.innerText += msg + '\n';
+    },
+  });
   
   // wrap a void function,
   // so that calling it will be delayed to avoid duplicate calls.
@@ -149,8 +159,7 @@
       output.innerText = '';
 
       // eval!
-      // hax for redirecting console.log!
-      window.console.log = (v) => { output.innerText += v + '\n' };
+      // TODO need a way to reliably kill the process so it stops writing to the DOM
       const script = document.createElement('script');
       script.type = "module";
       script.innerText = jsText;
