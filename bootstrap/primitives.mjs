@@ -69,12 +69,7 @@ export function toplevel(name, lineno, computeValue) {
         toplevelPrinter(name, lineno, val);
 	return val;
     } catch(e) {
-        if (name) {
-            // TODO print errors in failed definitions?
-            // it's not really a definition if it fails to define...
-        } else {
-            console.log(showError(e));
-        }
+        errorPrinter(name, lineno, e);
 	return undefined;
     }
 }
@@ -86,8 +81,18 @@ var toplevelPrinter = function(name, lineno, val) {
     }
 };
 
-export function configureRuntime({ toplevelPrinter: tp }) {
-    toplevelPrinter = tp;
+var errorPrinter = function(name, lineno, e) {
+    if (name) {
+        // TODO print errors in failed definitions?
+        // it's not really a definition if it fails to define...
+    } else {
+        console.log(showError(e));
+    }
+};
+
+export function configureRuntime({ toplevelPrinter: tp, errorPrinter: ep }) {
+    toplevelPrinter = tp || toplevelPrinter;
+    errorPrinter = ep || errorPrinter;
 }
 
 export function $boolean$63$(v) {

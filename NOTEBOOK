@@ -81,4 +81,19 @@ Maybe I'll expose a hook.
 Would be neat to turn it rightside out: yield intermediate results?
 
 
+================================================================================
+
+
+Next problem: no results are printed until the whole module terminates.
+
+Web Workers would probably fix this.
+But, browsers apparently don't support es6 modules in web workers yet.
+So I need to either:
+- compile directly to some other format instead of mjs
+  - but does any format support both nodejs and browsers?
+- use webpack/rollup to convert .mjs to browser files
+- wait for native support
+- not use web workers
+
+
 

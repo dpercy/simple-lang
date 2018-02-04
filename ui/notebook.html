@@ -125,14 +125,20 @@
     toplevelPrinter: function(name, lineno, val) {
       const msg = name ? "(def " + name + " " + show(val) + ")" : show(val);
 
-      // TODO create line widget instead
       const div = document.createElement('div');
       div.innerText = msg;
       div.classList = 'result value';
       
-      console.log('go?', lineno, div);
-      const w = editor.addLineWidget(lineno, div);
-      console.log('ok', w);
+      editor.addLineWidget(lineno, div);
+    },
+    errorPrinter: function(name, lineno, e) {
+      const msg = "(error " + show(e) + ")";
+      
+      const div = document.createElement('div');
+      div.innerText = msg;
+      div.classList = 'result error';
+
+      editor.addLineWidget(lineno, div);
     },
   });
   
