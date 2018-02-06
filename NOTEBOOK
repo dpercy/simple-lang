@@ -92,8 +92,50 @@ So I need to either:
 - compile directly to some other format instead of mjs
   - but does any format support both nodejs and browsers?
 - use webpack/rollup to convert .mjs to browser files
-- wait for native support
-- not use web workers
+- use a module loader inside the worker
+
+
+What if I compiled each definition in a module to a promise?
+It's legal to use await inside a promise, so they could just await each other.
+
+(def x (+ 2 3))
+(def y (* x x))
+
+=>
+
+const x = new Promise(async function(resolve) { return (  (await import "+")(2, 3)  ) })
+const y = new Promise(async function(resolve) { return (  (await import "*")(await x, await x) ); })
+
+
+pro:
+- can use es6 modules
+con:
+- have to use annoying promises
+
+
+
+Another idea:
+compile to some dumb format with just JS values,
+similar to (identical to?) AMD.
+
+{
+    requires: ['thing.sl', 'foo.sl'],
+    provides: ['x', 'y'],
+    run: function({ thing, foo }) {
+        // thing and foo are the *return values* of running that corresponding module.
+
+        const x = toplevel(() => 2 + 3);
+        const y = toplevel(() => x * x);
+        return { x, y };
+    }
+}
+
+In this impl, a module is a value.
+This might also help with `import *` type of thing.
+
+The "runtime system" would be a separate thing that invokes the `run` method.
+verbosity / control
+
 
 
 
