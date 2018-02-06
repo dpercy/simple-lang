@@ -6,7 +6,7 @@ DIFF = diff -U10
 # --color=yes forces color output even when using gmake -j -O
 COLORDIFF = $(shell if which -s colordiff ; then echo colordiff --color=yes ; else echo cat ; fi)
 
-NODE = node --experimental-modules --no-warnings
+NODE = node
 
 TEST_PROGRAMS = $(wildcard *.sl)
 TEST_OUTPUTS = $(TEST_PROGRAMS:.sl=.out)

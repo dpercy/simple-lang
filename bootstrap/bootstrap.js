@@ -1,6 +1,8 @@
 
-import fs from "fs";
-import * as compiler from "./compiler.mjs";
+const fs = require('fs');
+const rts = require('./rts.js');
+
+const compiler = rts.runModule('compiler');
 
 var source_code = fs.readFileSync("/dev/stdin").toString();
 

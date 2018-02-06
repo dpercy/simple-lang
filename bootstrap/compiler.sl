@@ -213,7 +213,7 @@
 (def (read-string/escape s)
   (match (match (string.slice s 0 1)
            ; keep me in sync with char-escape,
-           ; and with primitives.mjs showString...
+           ; and with primitives.js showString...
            ["0" "\0"]
            ["r" "\r"]
            ["n" "\n"]
@@ -384,7 +384,9 @@
 
 (def (parse-pat sexpr)
   (if (string? sexpr)
-      (PatHole sexpr)
+      (PatHole (match sexpr
+                 ["_" #false]
+                 [_ sexpr]))
       (match sexpr
         [(SelfQuoting v)  (PatLitr v)]
 
@@ -402,46 +404,19 @@
 
 (def (gen-program stmts)
   ; generate a sequence of JS statements, as one string
-  (string.append* (list
-                   (prelude)
-                   (string.append* (map gen-import (find-imports stmts)))
-                   (string.append* (map gen-stmt stmts)))))
-
-(def prelude-names
-  (list
-   "boolean?"
-   "int?"
-   "+"
-   "-"
-   "*"
-   "/"
-   "<"
-   "="
-   "string?"
-   "string=?"
-   "string-append"
-   "string-length"
-   "substring"
-   "ord"
-   "chr"
-   "equal?"
-   ;;
-   ))
-
-(def (prelude)
-  (string.append*
-   (list
-    "import { toplevel, bigInt, isA, $equal$63$ as matchEqual, "
-    ; TODO rename this function?
-    ;;(commas (map emit-name prelude-names))
-    " } from \"./primitives.mjs\";\n")))
-
-(def (gen-import modname)
-  (string.append*
-   (list
-    "import * as " (emit-name modname)
-    " from " (emit-quoted-string (string.append* (list "./" modname ".mjs")))
-    ";\n")))
+  (match (find-imports stmts)
+    [imports
+     (string.append* (list
+                      ";({ deps: ["
+                      (commas (map emit-quoted-string
+                                   (cons "primitives" imports)))
+                      "],\n"
+                      "run: function({ toplevel, bigInt, isA, $equal$63$: matchEqual }, "
+                      (commas (map emit-name imports)) ") {\n"
+                      (string.append* (map gen-stmt stmts))
+                      "return { " (commas (map emit-name (find-defs stmts))) " };\n"
+                      "},\n"
+                      "});\n"))]))
 
 (def (find-imports form)
   (core-fold (empty)
@@ -451,6 +426,18 @@
 (def (find-imports/base-case form)
   (match form
     [(Global modname name) (list modname)]
+    [_ #false]))
+
+(def (find-defs form)
+  (core-fold (empty)
+             set-union
+             find-defs/base-case
+             form))
+(def (find-defs/base-case form)
+  (match form
+    [(DefStruct name _) (list name)]
+    [(DefVal name _) (list name)]
+    [(DefFun name _ _) (list name)]
     [_ #false]))
 
 (def (gen-stmt stmt)
@@ -463,7 +450,7 @@
                            "() => " (gen-expr e) ");\n"))]
     [(LineNum n (DefVal name e)) (string.append*
                                   (list
-                                   "export const "
+                                   "const "
                                    (emit-name name)
                                    " = toplevel("
                                    (emit-quoted-string name) ", "
@@ -472,7 +459,7 @@
     [(LineNum n s) (gen-stmt s)]
     [(DefFun name params body) (string.append*
                                 (list
-                                 "export function "
+                                 "function "
                                  (emit-name name)
                                  "("
                                  (commas (map emit-name params))
@@ -488,7 +475,7 @@
        [(cons orig-name (cons name params))
         (string.append*
          (list
-          "export function " name "(" (commas params) ") {\n"
+          "function " name "(" (commas params) ") {\n"
           ; Arity check before `this` check,
           ; because the inner call using `new` always has the correct arity.
           (emit-arity-check orig-name (length params))
@@ -570,6 +557,7 @@
 
 (def (gen-pat scrut pat)
   (match pat
+    [(PatHole #false) ""]
     [(PatHole name)
      (string.append*
       (list
@@ -621,7 +609,7 @@
 (def (char-escape c)
   (match c
     ; keep me in sync with read-string/escape,
-    ; and with primitives.mjs showString...
+    ; and with primitives.js showString...
     ["\0" "\\0"]
     ["\r" "\\r"]
     ["\n" "\\n"]

@@ -1,12 +1,10 @@
-import bigInt from "./BigInteger.mjs";
+const bigInt = require('./BigInteger.js');
 
-export { bigInt };
-
-export function showError(e) {
+function showError(e) {
     return "(error " + show(e) + ")";
 }
 
-export function show(v) {
+function show(v) {
     switch (typeof v) {
     case 'boolean':
         return v ? "#true" : "#false";
@@ -63,7 +61,7 @@ function showRaw(v) {
     return "(### RAW JS VALUE ### " + v + " ###)";
 }
 
-export function toplevel(name, lineno, computeValue) {
+function toplevel(name, lineno, computeValue) {
     try {
     	const val = computeValue();
         toplevelPrinter(name, lineno, val);
@@ -90,26 +88,26 @@ var errorPrinter = function(name, lineno, e) {
     }
 };
 
-export function configureRuntime({ toplevelPrinter: tp, errorPrinter: ep }) {
+function configureRuntime({ toplevelPrinter: tp, errorPrinter: ep }) {
     toplevelPrinter = tp || toplevelPrinter;
     errorPrinter = ep || errorPrinter;
 }
 
-export function $boolean$63$(v) {
+function $boolean$63$(v) {
     if (arguments.length !== 1)
         throw "boolean?: expected 1 argument but got " + arguments.length;
     return typeof v === "boolean";
 }
 $boolean$63$.schemeName = "boolean?";
 
-export function $int$63$(v) {
+function $int$63$(v) {
     if (arguments.length !== 1)
         throw "int?: expected 1 argument but got " + arguments.length;
     return bigInt.isInstance(v);
 }
 $int$63$.schemeName = "int?";
 
-export function $$43$(x, y) {
+function $$43$(x, y) {
     if (arguments.length !== 2)
         throw "+: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
@@ -118,7 +116,7 @@ export function $$43$(x, y) {
 }
 $$43$.schemeName = "+";
 
-export function $_(x, y) {
+function $_(x, y) {
     if (arguments.length !== 2)
         throw "-: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
@@ -127,7 +125,7 @@ export function $_(x, y) {
 }
 $_.schemeName = "-";
 
-export function $$42$(x, y) {
+function $$42$(x, y) {
     if (arguments.length !== 2)
         throw "*: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
@@ -136,7 +134,7 @@ export function $$42$(x, y) {
 }
 $$42$.schemeName = "*";
 
-export function $$47$(x, y) {
+function $$47$(x, y) {
     if (arguments.length !== 2)
         throw "/: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
@@ -150,7 +148,7 @@ export function $$47$(x, y) {
 }
 $$47$.schemeName = "/";
 
-export function $$60$(x, y) {
+function $$60$(x, y) {
     if (arguments.length !== 2)
         throw "<: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
@@ -159,7 +157,7 @@ export function $$60$(x, y) {
 }
 $$60$.schemeName = "<";
 
-export function $$61$(x, y) {
+function $$61$(x, y) {
     if (arguments.length !== 2)
         throw "=: expected 2 arguments but got " + arguments.length;
     if (!($int$63$(x) && $int$63$(y)))
@@ -169,14 +167,14 @@ export function $$61$(x, y) {
 $$61$.schemeName = "=";
 
 
-export function $string$63$(v) {
+function $string$63$(v) {
     if (arguments.length !== 1)
         throw "string?: expected 1 argument but got " + arguments.length;
     return typeof v === 'string';
 }
 $string$63$.schemeName = "string?";
 
-export function $string$61$$63$(x, y) {
+function $string$61$$63$(x, y) {
     if (arguments.length !== 2)
         throw "string=?: expected 2 arguments but got " + arguments.length;
     if (!($string$63$(x) && $string$63$(y)))
@@ -185,7 +183,7 @@ export function $string$61$$63$(x, y) {
 }
 $string$61$$63$.schemeName = "string=?";
 
-export function $string_append(x, y) {
+function $string_append(x, y) {
     if (arguments.length !== 2)
         throw "string-append: expected 2 arguments but got " + arguments.length;
     if (!($string$63$(x) && $string$63$(y)))
@@ -194,7 +192,7 @@ export function $string_append(x, y) {
 }
 $string_append.schemeName = "string-append";
 
-export function $string_length(x) {
+function $string_length(x) {
     if (arguments.length !== 1)
         throw "string-length: expected 1 argument but got " + arguments.length;
     if (!($string$63$(x)))
@@ -203,7 +201,7 @@ export function $string_length(x) {
 }
 $string_length.schemeName = "string-length";
 
-export function $substring(x, start, end) {
+function $substring(x, start, end) {
     if (arguments.length !== 3)
         throw "substring: expected 3 arguments but got " + arguments.length;
     if (!($string$63$(x))) {
@@ -229,7 +227,7 @@ export function $substring(x, start, end) {
 }
 $substring.schemeName = "substring";
 
-export function $ord(s) {
+function $ord(s) {
     if (arguments.length !== 1)
         throw "ord: expected 1 argument but got " + arguments.length;
     if (!($string$63$(s)))
@@ -240,7 +238,7 @@ export function $ord(s) {
 }
 $ord.schemeName = "ord";
 
-export function $chr(i) {
+function $chr(i) {
     if (arguments.length !== 1)
         throw "chr: expected 1 argument but got " + arguments.length;
     // TODO make JS strings work by code points instead?
@@ -254,7 +252,7 @@ export function $chr(i) {
 }
 $chr.schemeName = "chr";
     
-export function $equal$63$(x, y) {
+function $equal$63$(x, y) {
     if (arguments.length !== 2)
         throw "equal?: expected 2 arguments but got " + arguments.length;
     // equal? works on bools, ints, strings, and structs.
@@ -281,9 +279,36 @@ export function $equal$63$(x, y) {
 }
 $equal$63$.schemeName = "equal?";
 
-export function isA(val, numParams, ctor) {
+function isA(val, numParams, ctor) {
     if (!(val instanceof ctor)) return false;
     if (numParams !== ctor.length)
         throw (ctor.schemeName + ": has " + ctor.length + " fields, but pattern has " + numParams);
     return true;
 }
+
+
+
+module.exports = {
+    bigInt,
+    showError,
+    show,
+    toplevel,
+    configureRuntime,
+    $boolean$63$,
+    $int$63$,
+    $$43$,
+    $_,
+    $$42$,
+    $$47$,
+    $$60$,
+    $$61$,
+    $string$63$,
+    $string$61$$63$,
+    $string_append,
+    $string_length,
+    $substring,
+    $ord,
+    $chr,
+    $equal$63$,
+    isA,
+};
