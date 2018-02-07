@@ -175,9 +175,11 @@
     clearLineWidgets();
 
     const sourceText = editor.getValue();
-    const worker = new Worker("./execution-worker.js");
+
+    if (executionWorker) executionWorker.terminate();
+    executionWorker = new Worker("./execution-worker.js");
     // worker will eventually reply with the compiled text
-    worker.onmessage = function(e) {
+    executionWorker.onmessage = function(e) {
       switch (e.data.type) {
 	case 'compiled': {
 	  const output = document.getElementById('output');
@@ -199,7 +201,7 @@
 	  break;
       }
     };
-    worker.postMessage(sourceText);
+    executionWorker.postMessage(sourceText);
   });
   
   editor.on('change', saveInBrowser);
