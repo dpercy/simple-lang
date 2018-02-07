@@ -15,17 +15,15 @@ Synchronously run a module in this format:
 
 const fs = require('fs');
 const path = require('path');
+const bigInt = require('./BigInteger');
+
+// primitives.js assumes bigInt is available globally
+global.bigInt = bigInt;
+
 
 function makeRTS({ basedir }) {
 
     const modRecords = {}; // module-name -> module-record
-    
-    // hax preload primitives
-    const prims = require('./primitives');
-    modRecords['primitives'] = {
-        deps: [],
-        run: () => prims,
-    };
 
     // load a module and all of its deps into the cache, then return it.
     function loadModule(modname) {

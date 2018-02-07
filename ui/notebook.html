@@ -118,11 +118,8 @@
 <script src="vendor/codemirror.js"></script>
 <script src="vendor/scrollpastend.js"></script>
 <script>
-  /////import { $compile_program } from "./bootstrap/compiler.mjs";
-  /////import { configureRuntime, show } from "./primitives.mjs";
 
   var executionWorker = null;
-  
   
   // wrap a void function,
   // so that calling it will be delayed to avoid duplicate calls.
@@ -154,14 +151,53 @@
     }
   }
 
+  function addValueWidget(name, lineno, repr) {
+    const msg = name ? "(def " + name + " " + repr + ")" : repr;
+
+    const div = document.createElement('div');
+    div.innerText = msg;
+    div.classList = 'result value';
+    
+    editor.addLineWidget(lineno, div);
+  }
+
+  function addErrorWidget(name, lineno, repr) {
+    const msg = "(error " + repr + ")";
+    
+    const div = document.createElement('div');
+    div.innerText = msg;
+    div.classList = 'result error';
+
+    editor.addLineWidget(lineno, div);
+  }
+
   editor.on('change', function() {
+    clearLineWidgets();
+
     const sourceText = editor.getValue();
     const worker = new Worker("./execution-worker.js");
     // worker will eventually reply with the compiled text
     worker.onmessage = function(e) {
-      const output = document.getElementById('output');
-      output.innerText = e.data;
-      clearLineWidgets();
+      switch (e.data.type) {
+	case 'compiled': {
+	  const output = document.getElementById('output');
+	  output.innerText = e.data.jsText;
+	  break;
+	}
+	case 'statementValue': {
+	  const { name, lineno, repr } = e.data;
+	  addValueWidget(name, lineno, repr);
+	  break;
+	}
+	case 'statementError': {
+	  const { name, lineno, repr } = e.data;
+	  addErrorWidget(name, lineno, repr);
+	  break;
+	}
+	default:
+	  console.error('unrecognized message', e);
+	  break;
+      }
     };
     worker.postMessage(sourceText);
   });

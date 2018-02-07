@@ -8,26 +8,7 @@ This web worker compiles and runs a single program.
 
 /*
   TODO what about this?
-configureRuntime({
-    toplevelPrinter: function(name, lineno, val) {
-        const msg = name ? "(def " + name + " " + show(val) + ")" : show(val);
-
-        const div = document.createElement('div');
-        div.innerText = msg;
-        div.classList = 'result value';
-        
-        editor.addLineWidget(lineno, div);
-    },
-    errorPrinter: function(name, lineno, e) {
-        const msg = "(error " + show(e) + ")";
-        
-        const div = document.createElement('div');
-        div.innerText = msg;
-        div.classList = 'result error';
-
-        editor.addLineWidget(lineno, div);
-    },
-});
+;
 */
 
 importScripts('./bootstrap/BigInteger.js');
@@ -36,14 +17,7 @@ importScripts('./bootstrap/primitives.js');
 class RTS {
     constructor(prefix) {
         this.prefix = prefix;
-        this.modRecords = {
-            primitives: {
-                deps: [],
-                run: function() {
-                    return primitives;
-                },
-            }
-        };
+        this.modRecords = {};
         this.modValues = {};
     }
 
@@ -111,9 +85,27 @@ onmessage = async function(e) {
     const sourceText = e.data;
 
     const jsText = compiler.$compile_program(sourceText);
+    postMessage({ type: 'compiled', jsText });
 
-    // for now let's just compile, not run
-    postMessage(jsText);
+    // set up runtime system
+    const rts = new RTS('bootstrap/');
+    await rts.loadModule('primitives');
+    const primitives = rts.runModule('primitives');
+    primitives.configureRuntime({
+        toplevelPrinter: function(name, lineno, val) {
+            const repr = primitives.show(val);
+            self.postMessage({ type: 'statementValue', name, lineno, repr });
+        },
+        errorPrinter: function(name, lineno, err) {
+            const repr = primitives.show(err);
+            self.postMessage({ type: 'statementError', name, lineno, repr });
+        },
+    });
+    // hack: prevent further fetching
+    rts.prefix = 'http://about:blank/';
+    
+    rts.modRecords['main'] = eval(jsText);
+    rts.runModule('main');
 
     close();
 };
