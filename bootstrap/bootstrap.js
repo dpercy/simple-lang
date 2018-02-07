@@ -1,6 +1,8 @@
 
 const fs = require('fs');
-const rts = require('./rts.js');
+const rts = require('./rts.js').makeRTS({
+    basedir: __dirname,
+});
 
 const compiler = rts.runModule('compiler');
 
