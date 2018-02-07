@@ -1,4 +1,9 @@
-const bigInt = require('./BigInteger.js');
+if (typeof require !== 'undefined') {
+    bigInt = require('./BigInteger.js');
+} else {
+    if (typeof bigInt === 'undefined')
+        throw Error("primitives.js relies on BigInteger.js");
+}
 
 function showError(e) {
     return "(error " + show(e) + ")";
@@ -288,7 +293,7 @@ function isA(val, numParams, ctor) {
 
 
 
-module.exports = {
+const primitives = {
     bigInt,
     showError,
     show,
@@ -312,3 +317,6 @@ module.exports = {
     $equal$63$,
     isA,
 };
+if (typeof module !== 'undefined') {
+    module.exports = primitives;
+}

@@ -117,30 +117,12 @@
 
 <script src="vendor/codemirror.js"></script>
 <script src="vendor/scrollpastend.js"></script>
-<script type="module">
-  import { $compile_program } from "./bootstrap/compiler.mjs";
-  import { configureRuntime, show } from "./primitives.mjs";
+<script>
+  /////import { $compile_program } from "./bootstrap/compiler.mjs";
+  /////import { configureRuntime, show } from "./primitives.mjs";
 
-  configureRuntime({
-    toplevelPrinter: function(name, lineno, val) {
-      const msg = name ? "(def " + name + " " + show(val) + ")" : show(val);
-
-      const div = document.createElement('div');
-      div.innerText = msg;
-      div.classList = 'result value';
-      
-      editor.addLineWidget(lineno, div);
-    },
-    errorPrinter: function(name, lineno, e) {
-      const msg = "(error " + show(e) + ")";
-      
-      const div = document.createElement('div');
-      div.innerText = msg;
-      div.classList = 'result error';
-
-      editor.addLineWidget(lineno, div);
-    },
-  });
+  var executionWorker = null;
+  
   
   // wrap a void function,
   // so that calling it will be delayed to avoid duplicate calls.
@@ -174,24 +156,14 @@
 
   editor.on('change', function() {
     const sourceText = editor.getValue();
-    try {
-      const jsText = $compile_program(sourceText);
-      ///document.getElementById('output').innerText = jsText;
+    const worker = new Worker("./execution-worker.js");
+    // worker will eventually reply with the compiled text
+    worker.onmessage = function(e) {
       const output = document.getElementById('output');
-      output.innerText = jsText;
+      output.innerText = e.data;
       clearLineWidgets();
-
-      // eval!
-      // TODO need a way to reliably kill the process so it stops writing to the DOM
-      const script = document.createElement('script');
-      script.type = "module";
-      script.innerText = jsText;
-      document.body.appendChild(script);
-      
-    } catch(e) {
-      window.e = e;
-      document.getElementById('output').innerText = e;
-    }
+    };
+    worker.postMessage(sourceText);
   });
   
   editor.on('change', saveInBrowser);
