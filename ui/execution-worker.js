@@ -84,6 +84,9 @@ onmessage = async function(e) {
     const compiler = await compilerPromise;
     const sourceText = e.data;
 
+    // TODO could break this up to send "parse" events,
+    // so the UI can mark each statement with a throbber,
+    // or maybe leave the previous result showing but grayed out
     const jsText = compiler.$compile_program(sourceText);
     postMessage({ type: 'compiled', jsText });
 

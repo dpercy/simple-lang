@@ -139,3 +139,79 @@ verbosity / control
 
 
 
+================================================================================
+
+
+current annoyance?
+
+primitives.<
+primitives.=
+(primitives.+ (fib (primitives.- n 1)) (fib (primitives.- n 2)))
+
+
+Why is it like this?
+I'm using Java-style fully-qualified names to determine dependencies.
+"foo" means (Var "foo")
+"prim.foo" means (Global "prim" "foo")
+
+
+Maybe you can say (using primitives).
+
+So  resolving an identifier  requires  looking up another module's exports.
+This seems like a side effect!  (A request to the environment.)
+
+Or, you could say that parsing leaves some identifiers "unresolved".
+Resolving them requires a "link" step.
+But would you "link" before or after compiling??
+
+It's more intuitive for identifiers to be resolved during parsing.
+Also, IDE features like completion require you do list your imports.
+
+
+
+Maybe  parse  takes an "env" or "libs" parameter,
+which tells it
+- whether a given library exists
+- what names it exports
+
+Maybe it's just a big list!
+
+(list (Lib "primitives" (list "+" "<" "string-append" ...))
+      (Lib "string" (list "slice" "length" ...))
+      (Lib "list" (list "slice" "length" ...))
+      ...)
+
+- super simple
+- easy to print / inspect
+
+Why is this "list" model inadequate?
+It assumes you've already ordered all the modules,
+so you know which ones are elligible to be used.
+In reality you might just have a bag of files.
+
+
+(What if you break the cycle this way?
+1. read
+2. parse -> determines exports
+3. resolve -> evaluates the using statements, requires only parsing
+)
+
+(What if you stop assuming "namespace" == "compilation unit" ?
+- "module" would be a semantic concept: a named bundle of definitions.
+- compilation strategy is layered on top of that.
+
+Does this help though?
+The problem statement remains:
+(using foo)
+(using bar)
+x     ; what is x?
+
+http://www.cs.nott.ac.uk/~pszgmh/appsem-papers/lagorio.pdf
+
+
+)
+
+
+This is too complicated for such a simple feature.
+The goal was: avoid typing "primitives.+" .
+
