@@ -1,6 +1,6 @@
 
-<link rel="stylesheet"
-      href="vendor/codemirror.css">
+<link rel="stylesheet" href="vendor/codemirror.css">
+<link rel="stylesheet" href="vendor/dialog.css">
 <style>
   body {
     margin: 0;
@@ -117,6 +117,9 @@
 
 <script src="vendor/codemirror.js"></script>
 <script src="vendor/scrollpastend.js"></script>
+<script src="vendor/search.js"></script>
+<script src="vendor/searchcursor.js"></script>
+<script src="vendor/dialog.js"></script>
 <script>
 
   var executionWorker = null;
@@ -137,7 +140,8 @@
   
   var editor = CodeMirror.fromTextArea(myTextarea, {
     scrollPastEnd: true,
-    lineNumbers: true
+    lineNumbers: true,
+    lineWrapping: true,
   });
   window.editor = editor;
   const filenameInput = document.getElementById('filename');
@@ -184,6 +188,12 @@
 	case 'compiled': {
 	  const output = document.getElementById('output');
 	  output.innerText = e.data.jsText;
+	  break;
+	}
+	case 'compileFailed': {
+	  const { err } = e.data;
+	  const output = document.getElementById('output');
+	  output.innerText = err + '\n' + err.stack;
 	  break;
 	}
 	case 'statementValue': {

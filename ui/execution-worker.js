@@ -87,7 +87,14 @@ onmessage = async function(e) {
     // TODO could break this up to send "parse" events,
     // so the UI can mark each statement with a throbber,
     // or maybe leave the previous result showing but grayed out
-    const jsText = compiler.$compile_program(sourceText);
+    let jsText;
+    try {
+        jsText = compiler.$compile_program(sourceText);
+    } catch(e) {
+        postMessage({ type: 'compileFailed', err: e });
+        close();
+        return;
+    }
     postMessage({ type: 'compiled', jsText });
 
     // set up runtime system
