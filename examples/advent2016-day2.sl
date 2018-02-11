@@ -1,5 +1,9 @@
-(struct empty 0)
-(struct cons 2)
+
+(def empty list.empty)
+(def cons list.cons)
+(def = int.=)
+(def - int.-)
+(def + int.+)
 
 (def (list3 a b c)
   (cons a (cons b (cons c (empty)))))
@@ -28,7 +32,7 @@
 ; "If a move doesn't lead to a button, ignore it".
 
 
-(struct Posn 2)
+(struct (Posn x y))
 
 (def (deref p)
   (match p
@@ -82,7 +86,7 @@
 (def (move* p s)
   (match s
     ["" p]
-    [ss (move* (move p (substring s 0 1)) (substring s 1))]))
+    [ss (move* (move p (string.slice s 0 1)) (string.slice* s 1))]))
 
 
 (def pos0 (move* start (list-ref input 0 #f)))

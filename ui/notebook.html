@@ -191,9 +191,9 @@
 	  break;
 	}
 	case 'compileFailed': {
-	  const { err } = e.data;
+	  const { message, stack } = e.data;
 	  const output = document.getElementById('output');
-	  output.innerText = err + '\n' + err.stack;
+	  output.innerText = message + '\n' + stack;
 	  break;
 	}
 	case 'statementValue': {

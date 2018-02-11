@@ -91,7 +91,8 @@ onmessage = async function(e) {
     try {
         jsText = compiler.$compile_program(sourceText);
     } catch(e) {
-        postMessage({ type: 'compileFailed', err: e });
+        const {  message, stack } = e;
+        postMessage({ type: 'compileFailed', message, stack });
         close();
         return;
     }
@@ -101,6 +102,20 @@ onmessage = async function(e) {
     const rts = new RTS('bootstrap/');
     await rts.loadModule('primitives');
     const primitives = rts.runModule('primitives');
+
+
+    // load the "standard library"
+    await rts.loadModule('bool');
+    await rts.loadModule('int');
+    await rts.loadModule('string');
+    await rts.loadModule('list');
+    // hack: run the standard library before configureRuntime,
+    // so it doesn't print on the page.
+    rts.runModule('bool');
+    rts.runModule('int');
+    rts.runModule('string');
+    rts.runModule('list');
+    
     primitives.configureRuntime({
         toplevelPrinter: function(name, lineno, val) {
             const repr = primitives.show(val);
@@ -111,6 +126,8 @@ onmessage = async function(e) {
             self.postMessage({ type: 'statementError', name, lineno, repr });
         },
     });
+
+    
     // hack: prevent further fetching
     rts.prefix = 'http://about:blank/';
     

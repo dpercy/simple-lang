@@ -1,7 +1,17 @@
 
+; TODO impl imports
+(def * int.*)
+(def + int.+)
+(def < int.<)
+(def - int.-)
+(def empty list.empty)
+(def cons list.cons)
+
+
 (def input "L1, L5, R1, R3, L4, L5, R5, R1, L2, L2, L3, R4, L2, R3, R1, L2, R5, R3, L4, R4, L3, R3, R3, L2, R1, L3, R2, L1, R4, L2, R4, L4, R5, L3, R1, R1, L1, L3, L2, R1, R3, R2, L1, R4, L4, R2, L189, L4, R5, R3, L1, R47, R4, R1, R3, L3, L3, L2, R70, L1, R4, R185, R5, L4, L5, R4, L1, L4, R5, L3, R2, R3, L5, L3, R5, L1, R5, L4, R1, R2, L2, L5, L2, R4, L3, R5, R1, L5, L4, L3, R4, L3, L4, L1, L5, L5, R5, L5, L2, L1, L2, L4, L1, L2, R3, R1, R1, L2, L5, R2, L3, L5, L4, L2, L1, L2, R3, L1, L4, R3, R3, L2, R5, L1, L3, L3, L3, L5, R5, R1, R2, L3, L2, R4, R1, R1, R3, R4, R3, L3, R3, L5, R2, L2, R4, R5, L4, L3, L1, L5, L1, R1, R2, L1, R3, R4, R5, R2, R3, L2, L1, L5")
 
-(struct Posn 2)
+
+(struct (Posn x y))
 
 (def (add p1 p2)
   (match p1 [(Posn x1 y1)
@@ -24,19 +34,14 @@
   (turn-left (turn-left (turn-left heading))))
 (turn-right "N")
 
-(struct State 2) ; posn heading
+(struct (State posn heading))
 
 (def initial-state (State (Posn 0 0) "N"))
 
-(struct Inst 2) ; angle magnitude
+(struct (Inst angle magnitude))
 
-(def tokens (string-split input ", "))
+(def tokens (string.split input ", "))
 
-
-; for now we need to declare structs for lists
-(struct cons 2)
-(struct empty 0)
-(cons 1 (empty))
 
 (def (first c) (match c [(cons x xs) x]))
 (def (rest c)  (match c [(cons x xs) xs]))
@@ -48,9 +53,19 @@
     [(cons x xs) (cons (f x) (map f xs))]))
 
 (def (p s)
-  (Inst (substring s 0 1)
-        (string->number (substring s 1))))
+  (Inst (string.slice s 0 1)
+        (parse-int (string.slice* s 1) 0)))
         
+(def (parse-int s acc)
+  (match s
+    ["" acc]
+    [_ (parse-int (string.slice* s 1)
+                  (+ (* 10 acc)
+                     (parse-digit (string.slice s 0 1))))]))
+(def (parse-digit s)
+  (- (string.ord s) (string.ord "0")))
+
+
 (def instructions (map p tokens))
 
 (def (step state inst)
@@ -77,7 +92,7 @@
 initial-state
 
 (step initial-state (first instructions))
-ef
+
 (match initial-state
   [(State posn heading) heading])
   
@@ -95,7 +110,7 @@ ef
 
 (def (abs x)
   (match (< x 0)
-    [#true (- x)]
+    [#true (- 0 x)]
     [#false x]))
 (abs -7)
 (abs 0)
