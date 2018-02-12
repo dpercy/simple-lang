@@ -215,3 +215,26 @@ http://www.cs.nott.ac.uk/~pszgmh/appsem-papers/lagorio.pdf
 This is too complicated for such a simple feature.
 The goal was: avoid typing "primitives.+" .
 
+
+================================================================================
+
+
+some problems:
+- big code crashes the compiler
+    - stack overflow
+    - all different parsing functions - some tail, some not
+
+   some solutions:
+    - impl procedures, rewrite parsing as a procedure.
+    - "monoidal parsing" - divide and conquer for O(log n) stack
+    
+    - implement tail recursion
+
+    - add some "iteration primitive"
+      - think of a C-style for-loop like a state machine:
+        1. you set up some initial state
+	2. you check whether you're done
+	3. you transform the state and goto 2
+
+
+

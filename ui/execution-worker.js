@@ -92,7 +92,11 @@ onmessage = async function(e) {
         jsText = compiler.$compile_program(sourceText);
     } catch(e) {
         const {  message, stack } = e;
-        postMessage({ type: 'compileFailed', message, stack });
+        postMessage({
+            type: 'compileFailed',
+            message: e.toString(),
+            stack: e.stack,
+        });
         close();
         return;
     }
