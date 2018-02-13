@@ -235,6 +235,19 @@ some problems:
         1. you set up some initial state
 	2. you check whether you're done
 	3. you transform the state and goto 2
+      - problems!
+        - requires lots of restructuring / boilerplate
+	- doesn't address core problem:
+	  tiny stack means the machine doesn't do algebra faithfully.
 
+
+Even implementing tail recursion isn't enough.
+I want to write map like this:
+(def (map f lst)
+  (match lst
+    [(empty) (empty)]
+    [(cons x xs) (cons (f x)
+                       ; 
+                       (map f xs) )]))
 
 
