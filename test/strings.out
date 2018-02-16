@@ -1,9 +1,0 @@
-32
-65
-" "
-"A"
-(error "ord: expected a character")
-2
-"\0"
-0
-(error "chr: expected an ASCII integer")
