@@ -1,0 +1,78 @@
+
+New design goals:
+- more convenience
+- more symmetry
+- extensible effects
+
+
+1. Observability
+
+property 1: A REPL or editor must be able to print any value.
+property 2: But! the program itself doesn't have access to this __repr__
+
+A tricky distinction!
+But I think this is important for equational reasoning:
+- You need 1 to see anything at all
+- You need 2 to know that private stuff stays private
+
+
+2. Functions
+
+Functions are auto-curried like in Haskell or OCaml.
+(add 1 2) is the same as ((add 1) 2) or (((add))) 1 2.
+(add 1) is a value, a function: number -> number.
+
+
+3. Structs
+
+You define a struct by choosing
+- name
+- number of arguments
+
+And then build a struct by calling the constructor.
+Nullary structs don't need to be called.
+
+In pattern matching, you can't destructure a partially-applied struct.
+
+
+4. Modules
+
+property 1: expressions and definitions can exist outside a module
+property 2: any closed set of definitions can be wrapped in a module without changing its meaning
+property 3: modules themselves are definitions
+
+By properties 1 and 2 we can turn this code:
+
+  map = ...
+  x = map ...
+
+into this:
+
+  module list { map = ... }
+  x = list.map ...
+
+because `map` has no free variables outside the new module.
+The new `list` module can be read and understood on its own.
+
+If you put two modules next to each other, one can import the other:
+
+  module json { dumps = ... }
+  module myblog { import json; foo = json.dumps ... }
+
+
+
+
+5. Built-in modules
+
+When you embed a program in some runtime,
+the runtime can make some built-in modules available for import.
+
+So you might do something like `import int` to get functions like `int.add`.
+
+
+6. Literals
+
+How do literals like `123` or `"hello"` work?
+- maybe they're overloaded?
+- maybe they desugar to stuff from some special modules?
+

@@ -56,3 +56,12 @@ The whole point of this VM is to remove artificial limits on recursion.
 
 Having an explicit stack might make delimited control much more efficient!
 You can copy the stack instead of CPSing all the code.
+
+
+First step is to desugar Match to If + struct-ref.
+Last time I tried this, the problems were:
+- I need to reorder scopes, which means
+- I need to generate fresh names
+
+So effects would be super helpful here.
+Maybe it's worth designing effects now?
