@@ -12,15 +12,20 @@
   (syntax-parser
     #:datum-literals (|;|)
     [(_
-      ; Any number of semicolons is fine to start
+      ; Grab "fragments" (consecutive readable non-semicolons),
+      ; separated by semicolons.
+      ; Parse each fragment as a statement.
       |;| ...
-      ; Then we've got a sequence of top-stmts.
-      (~seq expr
-            ; Each expr must be followed by one semicolon.
+      (~seq (~seq (~and (~not |;|) fragment) ...)
             |;|
-            ; And then extras are fine too.
             |;| ...)
       ...)
 
      #'(#%module-begin
-        expr ...)]))
+        (statement fragment ...) ...)]))
+
+(define-syntax statement
+  (syntax-parser
+    #:datum-literals (= struct)
+    [(_ x:id = expr)  #'(define x expr)]
+    [(_ expr) #'(#%expression expr)]))
