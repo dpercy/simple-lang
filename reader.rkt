@@ -10,7 +10,8 @@
   (parameterize ([current-readtable (make-full-readtable (current-readtable))]
                  [read-square-bracket-with-tag #true]
                  [read-curly-brace-with-tag #true]
-                 [read-cdot #true])
+                 ;;[read-cdot #true]
+                 )
     (read-syntax src in)))
 (define (read-curly in)
   (syntax->datum (read-curly-syntax #false in)))

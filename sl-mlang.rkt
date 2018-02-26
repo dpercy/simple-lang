@@ -6,8 +6,11 @@
          #%datum
          )
 
-(require (for-syntax syntax/parse))
-(require racket/splicing)
+(require (for-syntax syntax/parse
+                     racket/syntax))
+(require racket/splicing
+         racket/require
+         )
 
 (define-syntax sl:#%module-begin
   (syntax-parser
@@ -24,13 +27,32 @@
      #'(#%module-begin
         (statement fragment ...) ...)]))
 
+
 (define-syntax statement
   (syntax-parser
-    #:datum-literals (= struct)
+    #:datum-literals (= struct import #%braces)
+    [(_ import name:id) #'(sl:import name)]
     [(_ struct name:id field:id ...) #'(sl:struct name field ...)]
-    [(_ x:id = expr)  #'(define x expr)]
+    [(_ x:id = expr)  #'(begin
+                          (provide x)
+                          (define x expr))]
     [(_ f:id x:id ... = expr)  #'(define (f x ...) expr)]
     [(_ expr ...) #'(#%expression (sl:parens expr ...))]))
+
+
+(define-syntax sl:import
+  (syntax-parser
+    [(_ name:id)
+     '''(with-syntax ([filename (datum->syntax #'name (format "~a.sl" (syntax-e #'name)))]
+                      [prefix (format-id #'name "~a." #'name)])
+          #'(require ;;(prefix-in prefix (path-up filename))
+             (path-up filename)
+             ))
+     (let ([filename (format "~a.sl" (syntax-e #'name))]
+           [prefix (format-id #'name "~a." #'name)]
+           )
+       (datum->syntax #'name `(,#'require (,#'prefix-in "lib."                                                                                           (,#'path-up ,filename)
+                                                        ))))]))
 
 
 (define-syntax sl:parens
@@ -55,12 +77,15 @@
   (syntax-parser
     [(_ name:id)
      #'(begin
-         (splicing-local [(struct name () #:transparent
-                            #:constructor-name make-it)]
-           (define name (make-it))))]
+         (define name (splicing-local [(struct name () #:transparent
+                                         #:constructor-name make-it)]
+                        (make-it)))
+         (provide name))]
     [(_ name:id field:id ...)
 
-     #'(struct name (field ...) #:transparent)]))
+     #'(begin
+         (struct name (field ...) #:transparent)
+         (provide (struct-out name)))]))
 
 (define-syntax sl:match
   (syntax-parser
@@ -98,5 +123,10 @@
     [(_ x:id) #:when (not (identifier-capitalized? #'x))
      #'x]))
 (begin-for-syntax
+  (require (only-in racket/list last)
+           (only-in racket/string string-split))
   (define (identifier-capitalized? x)
-    (char-upper-case? (string-ref (symbol->string (syntax-e x)) 0))))
+    (define str (symbol->string (syntax-e x)))
+    (define toks (string-split str "."))
+    (define lasttok (last toks))
+    (char-upper-case? (string-ref lasttok 0))))

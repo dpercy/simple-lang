@@ -55,3 +55,25 @@ match 5 {
   3 => 999
   5 => 1337
 }
+
+"string"
+
+
+import lib
+lib.x
+lib.asdf
+lib.Foo
+lib.W 1
+
+match lib.Foo {
+  lib.Foo => "yes"
+}
+
+match lib.W "ok" {
+  lib.Foo => "no"
+  lib.W x => x
+}
+
+# TODO how do you write booleans?
+# hash is for comments... so #t #f can't parse.
+# also maybe booleans are a special struct...
