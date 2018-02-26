@@ -3,13 +3,23 @@
 (provide (rename-out [sl:#%module-begin #%module-begin]
                      [sl:parens #%app]
                      [true True]
-                     [false False])
-         #%datum)
+                     [false False]
+                     [empty Empty])
+         Cons
+         add
+         equal
+         less
+         #%datum
+         (struct-out Done)
+         (struct-out Perform)
+         perform
+         capture)
 
 (require (for-syntax syntax/parse
                      racket/syntax))
 (require racket/splicing
          racket/require
+         racket/control
          )
 
 (define-syntax sl:#%module-begin
@@ -30,14 +40,30 @@
 
 (define-syntax statement
   (syntax-parser
-    #:datum-literals (= struct import #%braces)
+    #:datum-literals (= ! struct import #%braces)
     [(_ import name:id) #'(sl:import name)]
     [(_ struct name:id field:id ...) #'(sl:struct name field ...)]
-    [(_ x:id = expr)  #'(begin
-                          (provide x)
-                          (define x expr))]
-    [(_ f:id x:id ... = expr)  #'(define (f x ...) expr)]
+    [(_ x:id = expr ...)  #'(define/pub x (sl:parens expr ...))]
+    [(_ f:id x:id ... ! = expr ...)
+
+     (with-syntax ([f-body (format-symbol "~a-body" #'f)])
+       #'(define/pub f
+           (lambda (x ...)
+             (Proc (local [(define (f-body)
+                             (sl:parens expr ...))]
+                     f-body)))))
+
+     ]
+    [(_ f:id x:id ... = expr ...)  #'(define/pub f
+                                       (lambda (x ...)
+                                         (sl:parens expr ...)))]
     [(_ expr ...) #'(#%expression (sl:parens expr ...))]))
+
+(define-syntax define/pub
+  (syntax-parser
+    [(_ name:id val) #'(begin
+                         (provide name)
+                         (define name val))]))
 
 
 (define-syntax sl:import
@@ -66,12 +92,21 @@
      #'(parens-no-semicolons expr ...)]))
 (define-syntax parens-no-semicolons
   (syntax-parser
-    #:datum-literals (match)
+    #:datum-literals (match !)
+    ; TODO enforce calls only happen in def proc?
+    [(_ form ... !) #'(Proc-call! (parens-no-semicolons form ...))]
     [(_ match form ...) #'(sl:match form ...)]
     ; Unary parens are fine: they're just grouping.
     [(_ x) #'x]
     ; One or more arguments is curried application.
-    [(_ f x0 xs ...) #'(curry f x0 xs ...)]))
+    [(_ f x0 xs ...) #'(parens-no-semicolons (app f x0) xs ...)]))
+
+(define/contract (app f arg) (-> procedure? any/c any/c)
+  (match (sub1 (procedure-arity f))
+    [0 (f arg)]
+    [(? positive-integer? new-arity)
+     (procedure-reduce-arity (curry f arg) new-arity)]
+    [_ (error 'app "bad func: ~v ; arg: ~v" f arg)]))
 
 (define-syntax sl:struct
   (syntax-parser
@@ -130,3 +165,43 @@
     (define toks (string-split str "."))
     (define lasttok (last toks))
     (char-upper-case? (string-ref lasttok 0))))
+
+
+(struct Done (value) #:transparent)
+(struct Perform (effect continuation) #:transparent)
+
+(struct Proc (code) #:transparent)
+
+(define/contract (Proc-call! proc) (-> Proc? any/c)
+  (match proc
+    [(Proc code) (code)]))
+
+(define (perform effect)
+  (Proc (lambda ()
+          (fcontrol effect))))
+
+(define (continuation->proc k)
+  ; k is a 1-arg Racket callable.
+  (lambda (v)
+    (Proc (lambda () (k v)))))
+
+(define/contract (capture proc) (-> Proc? any/c)
+  ; If running the code returns normally,
+  ; wrap the result in a Done.
+  ; If the code calls "perform",
+  ; then a Perform is returned instead.
+  (let/ec return
+    ; Done goes outside the prompt to avoid
+    ; capturing it as part of the continuation.
+    (Done (% (Proc-call! proc)
+             (lambda (eff k)
+               (return (Perform eff (continuation->proc k))))))))
+
+
+(define-match-expander Cons
+  (syntax-rules () [(_ x xs) (cons x xs)])
+  (make-rename-transformer #'cons))
+
+(define (add x y) (+ x y))
+(define (equal x y) (equal? x y))
+(define (less x y) (< x y))

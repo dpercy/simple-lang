@@ -12,6 +12,7 @@ x
 f y = 123
 (f)
 3
+f 9
 (f f)
 (f
 
@@ -21,7 +22,7 @@ struct Point x y
 (Point 1 2)
 (Point 1)
 Point
-
+"hrm"
 match Point 1 2 {
   v => v
 }
@@ -81,3 +82,43 @@ match True {
 }
 True
 False
+
+
+# TODO effects!
+# - primitive procedure "perform",
+#   throws any value.
+# - primitive structs Done and Perform
+# - primitive function iter?
+#                      capture?
+#                      reify?
+# - new syntax: def proc
+# - new syntax: invoke proc
+
+
+map f lst = match lst {
+  Empty => Empty
+  Cons x xs => Cons (f x) (map f xs)
+}
+
+map Wrap (Cons 1 (Cons 2 Empty))
+
+listEffects comp = match capture comp {
+  Done v => Empty
+  Perform eff k => Cons eff (listEffects
+                             (k "asdf"))
+}
+
+
+struct Yield val
+
+begin2 x y = y
+
+range lo hi ! = match less lo hi {
+  True => (begin2
+           (perform (Yield lo) !)
+           ((range (add lo 1) hi) !)
+          )
+  False => "ok"
+}
+
+listEffects (range -3 10)
