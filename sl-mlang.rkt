@@ -2,9 +2,9 @@
 
 (provide (rename-out [sl:#%module-begin #%module-begin]
                      [sl:parens #%app]
-                     )
-         #%datum
-         )
+                     [true True]
+                     [false False])
+         #%datum)
 
 (require (for-syntax syntax/parse
                      racket/syntax))

@@ -74,6 +74,10 @@ match lib.W "ok" {
   lib.W x => x
 }
 
-# TODO how do you write booleans?
-# hash is for comments... so #t #f can't parse.
-# also maybe booleans are a special struct...
+
+match True {
+  False => "nope"
+  True => "yay"
+}
+True
+False
