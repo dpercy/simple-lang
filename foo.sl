@@ -111,14 +111,35 @@ listEffects comp = match capture comp {
 
 struct Yield val
 
-begin2 x y = y
-
 range lo hi ! = match less lo hi {
-  True => (begin2
-           (perform (Yield lo) !)
-           ((range (add lo 1) hi) !)
-          )
+  True => ({
+    (perform (Yield lo) !)
+    (range (add lo 1) hi !)
+  })
   False => "ok"
 }
 
 listEffects (range -3 10)
+
+
+limit n comp ! = match less 0 n {
+  False => "done!"
+  True =>
+    match capture comp {
+      Done v => v
+      Perform (Yield v) k => {
+        perform (Yield v) !
+        limit (add n -1) (k "ok") !
+      }
+      Perform eff k => {
+        perform eff !
+        limit n (k "ok") !
+      }
+    }
+}
+
+listEffects (limit 4 (range -3 10))
+
+
+
+# TODO check plan - start JS VM?

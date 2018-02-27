@@ -40,7 +40,7 @@
 
 (define-syntax statement
   (syntax-parser
-    #:datum-literals (= ! struct import #%braces)
+    #:datum-literals (= ! struct import)
     [(_ import name:id) #'(sl:import name)]
     [(_ struct name:id field:id ...) #'(sl:struct name field ...)]
     [(_ x:id = expr ...)  #'(define/pub x (sl:parens expr ...))]
@@ -92,7 +92,16 @@
      #'(parens-no-semicolons expr ...)]))
 (define-syntax parens-no-semicolons
   (syntax-parser
-    #:datum-literals (match !)
+    #:datum-literals (match ! |;| #%braces)
+    [(_ (#%braces |;| ...
+                  (~seq (~seq (~and (~not |;|) fragment) ...)
+                        |;| ...)
+                  ...))
+     #'(let ()
+         ; similar to sl:#%module-begin, we're just using semicolons to
+         ; delimit fragments of code and group them into statements.
+         (statement fragment ...)
+         ...)]
     ; TODO enforce calls only happen in def proc?
     [(_ form ... !) #'(Proc-call! (parens-no-semicolons form ...))]
     [(_ match form ...) #'(sl:match form ...)]
