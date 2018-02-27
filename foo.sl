@@ -84,17 +84,6 @@ True
 False
 
 
-# TODO effects!
-# - primitive procedure "perform",
-#   throws any value.
-# - primitive structs Done and Perform
-# - primitive function iter?
-#                      capture?
-#                      reify?
-# - new syntax: def proc
-# - new syntax: invoke proc
-
-
 map f lst = match lst {
   Empty => Empty
   Cons x xs => Cons (f x) (map f xs)
