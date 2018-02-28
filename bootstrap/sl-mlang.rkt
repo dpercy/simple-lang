@@ -1,14 +1,21 @@
 #lang racket
 
 (provide (rename-out [sl:#%module-begin #%module-begin]
-                     [sl:parens #%app]
-                     [true True]
-                     [false False]
-                     [empty Empty])
+                     [sl:parens #%app])
          Cons
+         True
+         False
+         Empty
+         Void
          add
          equal
          less
+         lessEq
+         ord
+         chr
+         slice
+         strlen
+         strcat
          #%datum
          (struct-out Done)
          (struct-out Perform)
@@ -24,27 +31,38 @@
 
 (define-syntax sl:#%module-begin
   (syntax-parser
-    #:datum-literals (|;|)
+    #:datum-literals (\;)
     [(_
       ; Grab "fragments" (consecutive readable non-semicolons),
       ; separated by semicolons.
       ; Parse each fragment as a statement.
-      |;| ...
-      (~seq (~seq (~and (~not |;|) fragment) ...)
-            |;| ...)
-      ...)
+      \; ...
+      (~seq (~and (~not \;) fragments) ...+ \; ...+) ...
+      )
 
      #'(#%module-begin
-        (statement fragment ...) ...)]))
+        (statement fragments ...) ...
+        )]))
 
 
 (define-syntax statement
   (syntax-parser
-    #:datum-literals (= ! struct import)
+    #:datum-literals (= ! struct import check)
     [(_ import name:id) #'(sl:import name)]
     [(_ struct name:id field:id ...) #'(sl:struct name field ...)]
+    [(_ check left ...+ = right ...+)
+     (let ([the-check #'(check-equal? (sl:parens left ...)
+                                      (sl:parens right ...))])
+       ; use the caller's srcloc on the check
+       ; TODO this doesn't work
+       (with-syntax ([the-check (datum->syntax the-check
+                                               (syntax-e the-check)
+                                               #'check)])
+         #'(module+ test
+             (require rackunit)
+             the-check)))]
     [(_ x:id = expr ...)  #'(define/pub x (sl:parens expr ...))]
-    [(_ f:id x:id ... ! = expr ...)
+    [(_ f:id x:id ...+ ! = expr ...)
 
      (with-syntax ([f-body (format-symbol "~a-body" #'f)])
        #'(define/pub f
@@ -54,9 +72,26 @@
                      f-body)))))
 
      ]
-    [(_ f:id x:id ... = expr ...)  #'(define/pub f
-                                       (lambda (x ...)
-                                         (sl:parens expr ...)))]
+    [(_ f:id ! = expr ...)
+
+     (with-syntax ([f-body (format-symbol "~a-body" #'f)])
+       #'(define/pub f
+           (Proc (local [(define (f-body)
+                           (sl:parens expr ...))]
+                   f-body))))
+
+     ]
+    [(_ f:id x:id ...+ = expr ...)  #'(define/pub f
+                                        (lambda (x ...)
+                                          (sl:parens expr ...)))]
+    [(_ expr ...) #'(#%expression (sl:parens expr ...))]))
+
+(define-syntax inner-statement
+  (syntax-parser
+    #:datum-literals (=)
+    ; the only local statements are defval and expr:
+    ; no struct, import, provide, func, proc...
+    [(_ x:id = expr ...)  #'(define x (sl:parens expr ...))]
     [(_ expr ...) #'(#%expression (sl:parens expr ...))]))
 
 (define-syntax define/pub
@@ -77,7 +112,7 @@
      (let ([filename (format "~a.sl" (syntax-e #'name))]
            [prefix (format-id #'name "~a." #'name)]
            )
-       (datum->syntax #'name `(,#'require (,#'prefix-in "lib."                                                                                           (,#'path-up ,filename)
+       (datum->syntax #'name `(,#'require (,#'prefix-in ,prefix                                                                                           (,#'path-up ,filename)
                                                         ))))]))
 
 
@@ -85,26 +120,33 @@
   (syntax-parser
     #:datum-literals (|;|)
     ; Filter out all semicolons; they have no significance inside parens.
-    [(_ |;| ...
-        (~seq (~and (~not |;|) expr)
-              |;| ...)
-        ...)
-     #'(parens-no-semicolons expr ...)]))
+    [(_ (~alt |;| fragment) ...)
+     #'(parens-no-semicolons fragment ...)]))
 (define-syntax parens-no-semicolons
   (syntax-parser
-    #:datum-literals (match ! |;| #%braces)
-    [(_ (#%braces |;| ...
-                  (~seq (~seq (~and (~not |;|) fragment) ...)
-                        |;| ...)
-                  ...))
+    ; TODO better syntax for: if, and, or?
+    #:datum-literals (match ! |;| #%braces if and or)
+    [(_ (#%braces
+         ; Grab "fragments" (consecutive readable non-semicolons),
+         ; separated by semicolons.
+         ; Parse each fragment as a statement.
+         \; ...
+         (~seq (~and (~not \;) fragments) ...+ \; ...+) ...
+         ))
+
      #'(let ()
          ; similar to sl:#%module-begin, we're just using semicolons to
          ; delimit fragments of code and group them into statements.
-         (statement fragment ...)
-         ...)]
+         (inner-statement fragments ...) ...
+         )]
+
     ; TODO enforce calls only happen in def proc?
-    [(_ form ... !) #'(Proc-call! (parens-no-semicolons form ...))]
+    [(_ form0 form ... !) #'(Proc-call! (parens-no-semicolons form0 form ...))]
     [(_ match form ...) #'(sl:match form ...)]
+    [(_ if test consq alt)
+     #'(sl:match test {#%braces \; True => consq \; False => alt \; })]
+    [(_ and x y) #'(parens-no-semicolons if x y False)]
+    [(_ or x y) #'(parens-no-semicolons if x True y)]
     ; Unary parens are fine: they're just grouping.
     [(_ x) #'x]
     ; One or more arguments is curried application.
@@ -136,17 +178,24 @@
     #:datum-literals (#%braces => |;|)
     [(_ arg-forms ...
         {#%braces
-         |;|...
-         (~seq (~and lhs-forms (~not =>) (~not |;| )) ...
-               =>
-               |;| ...
-               (~and rhs-forms (~not =>) (~not |;|)) ...
-               |;| ...)
+         \; ...
+         (~describe "case"
+                    (~seq (~describe "left-hand-side"
+                                     (~seq (~and (~not \;) (~not =>) lhs-forms) ...+))
+                          =>
+                          (~describe "right-hand-side"
+                                     (~seq (~and (~not \;) (~not =>) rhs-forms) ...+))
+                          \; ...))
          ...})
 
      #'(match (sl:parens arg-forms ...)
          [(sl:pattern lhs-forms ...) (sl:parens rhs-forms ...)] ...
-         )]))
+         )]
+    [(_ arg-forms ... {#%braces stuff ...})
+     (raise-syntax-error 'sl:match
+                         "malformed stuff in braces"
+                         #'(stuff ...)
+                         )]))
 
 (define-match-expander sl:pattern
   (syntax-parser
@@ -210,7 +259,23 @@
 (define-match-expander Cons
   (syntax-rules () [(_ x xs) (cons x xs)])
   (make-rename-transformer #'cons))
+(define True #true)
+(define False #false)
+(define Empty '())
+(define Void (void))
 
 (define (add x y) (+ x y))
 (define (equal x y) (equal? x y))
 (define (less x y) (< x y))
+(define (lessEq x y) (<= x y))
+
+(define (ord s)
+  (match (string->list s)
+    [(list c) (char->integer c)]))
+
+(define (chr i)
+  (list->string (list (integer->char i))))
+
+(define (slice s start end) (substring s start end))
+(define (strlen s) (string-length s))
+(define (strcat x y) (string-append x y))
