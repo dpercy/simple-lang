@@ -60,20 +60,6 @@ match 5 {
 "string"
 
 
-import lib
-lib.x
-lib.asdf
-lib.Foo
-lib.W 1
-
-match lib.Foo {
-  lib.Foo => "yes"
-}
-
-match lib.W "ok" {
-  lib.Foo => "no"
-  lib.W x => x
-}
 
 
 match True {
