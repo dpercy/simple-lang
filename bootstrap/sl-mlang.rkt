@@ -7,17 +7,25 @@
          False
          Empty
          Void
+
          add
          sub
          mul
+         div
+         mod
          equal
          less
          lessEq
+
+         isNumber
+         isString
+
          ord
          chr
          slice
          strlen
          strcat
+
          #%datum
          (struct-out Done)
          (struct-out Perform)
@@ -274,9 +282,14 @@
 (define (add x y) (+ x y))
 (define (sub x y) (- x y))
 (define (mul x y) (* x y))
+(define (div x y) (quotient x y))
+(define (mod x y) (remainder x y))
 (define (equal x y) (equal? x y))
 (define (less x y) (< x y))
 (define (lessEq x y) (<= x y))
+
+(define (isNumber v) (number? v))
+(define (isString v) (string? v))
 
 (define (ord s)
   (match (string->list s)
