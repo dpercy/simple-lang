@@ -71,6 +71,10 @@ either left right ! = match capture left {
     either (k v) right !
   }
 }
+check runParser (either (return 1) (return 2)) "input" = Parsed 1 "input"
+check runParser (either (fail "derp") (return 2)) "input" = Parsed 2 "input"
+check runParser (either (fail "derp") (fail "doop")) "input" = Fail "doop"
+
 
 # return is a very general procedure:
 # all it does is return a value.
@@ -87,6 +91,8 @@ lex ! = {
 # TODO or lex other things...
   lexNumber !
 }
+check runParser lex " 9;" = Parsed "9" ";"
+
 
 skipWhitespace ! = match char.isSpace (peek !) {
   True => {
@@ -105,7 +111,7 @@ lexNumber ! = {
 check runParser lexNumber "1" = Parsed "1" ""
 check runParser lexNumber  "123 " = Parsed "123" " "
 # TODO thread a counter through the parser to track "where" failed
-check runParser lexNumber " 9;" = Parsed "9" ";"
+check runParser (either (getWhere "isDigit" char.isDigit) (return "")) ";" = Parsed "" ";"
 
 
 
