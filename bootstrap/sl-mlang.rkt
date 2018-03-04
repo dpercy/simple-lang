@@ -8,6 +8,8 @@
          Empty
          Void
          add
+         sub
+         mul
          equal
          less
          lessEq
@@ -187,6 +189,7 @@
                     (~seq (~describe "left-hand-side"
                                      (~seq (~and (~not \;) (~not =>) lhs-forms) ...+))
                           =>
+                          \; ...
                           (~describe "right-hand-side"
                                      (~seq (~and (~not \;) (~not =>) rhs-forms) ...+))
                           \; ...))
@@ -269,6 +272,8 @@
 (define Void (void))
 
 (define (add x y) (+ x y))
+(define (sub x y) (- x y))
+(define (mul x y) (* x y))
 (define (equal x y) (equal? x y))
 (define (less x y) (< x y))
 (define (lessEq x y) (<= x y))

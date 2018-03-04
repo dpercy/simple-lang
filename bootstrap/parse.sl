@@ -14,10 +14,11 @@ struct Get
 struct HasNext
 struct Fail why
 struct Parsed val remainder
+struct EOF
 
 peek ! = match perform HasNext ! {
   True => perform Peek !
-  False => fail "EOF" !
+  False => EOF
 }
 get ! = match perform HasNext ! {
   True => perform Get !
@@ -46,9 +47,13 @@ runParser p input = match capture p {
 }
 
 
-getWhere errMsg pred ! = match pred (peek !) {
-  True => get !
-  False => fail errMsg !
+getWhere errMsg pred ! = match peek ! {
+  EOF => fail "EOF" !
+  c =>
+    match pred c {
+      True => get !
+      False => fail errMsg !
+    }
 }
 
 either left right ! = match capture left {
@@ -89,18 +94,24 @@ struct TokNumber n
 lex ! = {
   skipWhitespace !
 # TODO or lex other things...
-  lexNumber !
+  TokNumber (lexNumber !)
 }
-check runParser lex " 9;" = Parsed "9" ";"
+check runParser lex " 9;" = Parsed (TokNumber "9") ";"
 
 
-skipWhitespace ! = match char.isSpace (peek !) {
-  True => {
-    get !
-    skipWhitespace !
-  }
-  False => Void
+skipWhitespace ! = match peek ! {
+  EOF => Void
+  c =>
+    match char.isSpace c {
+      False => Void
+      True => {
+        get !
+        skipWhitespace !
+      }
+    }
 }
+check runParser skipWhitespace " f " = Parsed Void "f "
+check runParser skipWhitespace "  " = Parsed Void ""
 
 lexNumber ! = {
   head = getWhere "isDigit" char.isDigit !
@@ -113,7 +124,37 @@ check runParser lexNumber  "123 " = Parsed "123" " "
 # TODO thread a counter through the parser to track "where" failed
 check runParser (either (getWhere "isDigit" char.isDigit) (return "")) ";" = Parsed "" ";"
 
+stringToNumber prefix s = match strlen s {
+  0 => prefix
+  len => {
+    c = slice s 0 1
+    d = sub (ord c) (ord "0")
+    newPrefix = add d (mul 10 prefix)
+    stringToNumber newPrefix (slice s 1 len)
+  }
+}
+check stringToNumber 0 "123" = 123
+
+
+parseExpr ! = {
+  n = lex !
+  match n {
+    TokNumber n => core.Quote (stringToNumber 0 n)
+  }
+}
+
+skipWhitespaceAfter p ! = {
+  v = p !
+  skipWhitespace !
+  v
+}
+
+parse s = runParser (skipWhitespaceAfter parseExpr) s
+
+
+check parse " 123 " = Parsed (core.Quote 123) ""
 
 
 # Try writing imports as footnotes
 import char
+import core
