@@ -45,8 +45,8 @@
         )]))
 
 
-(define-syntax statement
-  (syntax-parser
+(define-syntax (statement stx)
+  (syntax-parse stx
     #:datum-literals (= ! struct import check)
     [(_ import name:id) #'(sl:import name)]
     [(_ struct name:id field:id ...) #'(sl:struct name field ...)]
@@ -54,10 +54,14 @@
      (let ([the-check #'(check-equal? (sl:parens left ...)
                                       (sl:parens right ...))])
        ; use the caller's srcloc on the check
-       ; TODO this doesn't work
-       (with-syntax ([the-check (datum->syntax the-check
-                                               (syntax-e the-check)
-                                               #'check)])
+       (with-syntax ([the-check
+                      (datum->syntax #'()
+                                     (syntax-e the-check)
+                                     ; note we have to really destructure the input manually,
+                                     ; can't do #'check to access that keyword,
+                                     ; because that would capture a *new* srcloc
+                                     (cadr
+                                      (syntax->list stx)))])
          #'(module+ test
              (require rackunit)
              the-check)))]

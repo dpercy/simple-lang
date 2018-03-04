@@ -104,6 +104,7 @@ lexNumber ! = {
 
 check runParser lexNumber "1" = Parsed "1" ""
 check runParser lexNumber  "123 " = Parsed "123" " "
+# TODO thread a counter through the parser to track "where" failed
 check runParser lexNumber " 9;" = Parsed "9" ";"
 
 
