@@ -80,6 +80,10 @@ check runParser (either (return 1) (return 2)) "input" = Parsed 1 "input"
 check runParser (either (fail "derp") (return 2)) "input" = Parsed 2 "input"
 check runParser (either (fail "derp") (fail "doop")) "input" = Fail "doop"
 
+alternatives parsers = list.foldr1 either parsers
+check runParser (alternatives [fail "a"; return 1; fail "c"]) "input" = Parsed 1 "input"
+check runParser (alternatives [fail "a"; fail "b"; fail "c"]) "input" = Fail "c"
+
 
 # return is a very general procedure:
 # all it does is return a value.
@@ -89,14 +93,22 @@ return val ! = val
 
 # TokNumber contains the string repr of the number.
 struct TokNumber n
+struct TokOpenParen
+struct TokCloseParen
 
 
 lex ! = {
   skipWhitespace !
 # TODO or lex other things...
-  TokNumber (lexNumber !)
+  alternatives [
+    lexNumber
+    lexPunctuation "(" TokOpenParen
+    lexPunctuation ")" TokCloseParen
+  ] !
 }
 check runParser lex " 9;" = Parsed (TokNumber "9") ";"
+check runParser lex "(9;" = Parsed TokOpenParen "9;"
+check runParser lex ")9;" = Parsed TokCloseParen "9;"
 
 
 skipWhitespace ! = match peek ! {
@@ -113,15 +125,22 @@ skipWhitespace ! = match peek ! {
 check runParser skipWhitespace " f " = Parsed Void "f "
 check runParser skipWhitespace "  " = Parsed Void ""
 
-lexNumber ! = {
-  head = getWhere "isDigit" char.isDigit !
-  tail = either lexNumber (return "") !
-  strcat head tail
+
+lexPunctuation c t ! = {
+  getWhere c (equal c) !
+  t
 }
 
-check runParser lexNumber "1" = Parsed "1" ""
-check runParser lexNumber  "123 " = Parsed "123" " "
-# TODO thread a counter through the parser to track "where" failed
+lexNumber ! = {
+  head = getWhere "isDigit" char.isDigit !
+  match either lexNumber (return (TokNumber "")) ! {
+    TokNumber tail =>
+      TokNumber (strcat head tail)
+  }
+}
+
+check runParser lexNumber "1" = Parsed (TokNumber "1") ""
+check runParser lexNumber  "123 " = Parsed (TokNumber "123") " "
 check runParser (either (getWhere "isDigit" char.isDigit) (return "")) ";" = Parsed "" ";"
 
 stringToNumber prefix s = match strlen s {
@@ -158,3 +177,4 @@ check parse " 123 " = Parsed (core.Quote 123) ""
 # Try writing imports as footnotes
 import char
 import core
+import list

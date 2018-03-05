@@ -140,7 +140,7 @@
 (define-syntax parens-no-semicolons
   (syntax-parser
     ; TODO better syntax for: if, and, or?
-    #:datum-literals (match ! |;| #%braces if and or)
+    #:datum-literals (match ! |;| #%braces #%brackets if and or)
     [(_ (#%braces
          ; Grab "fragments" (consecutive readable non-semicolons),
          ; separated by semicolons.
@@ -154,6 +154,22 @@
          ; delimit fragments of code and group them into statements.
          (inner-statement fragments ...) ...
          )]
+    [(_ (#%brackets
+         ; Grab "fragments" (consecutive readable non-semicolons),
+         ; separated by semicolons.
+         ; Parse each fragment as an expression.
+         \; ...
+         (~seq (~and (~not \;) fragments) ...+ \; ...+) ...
+         (~and (~not \;) trailing) ...+
+         \; ...))
+     #'(list (parens-no-semicolons fragments ...) ...
+             (parens-no-semicolons trailing ...))]
+    [(_ (#%brackets))
+     #'(list)]
+    [(_ (#%brackets stuff ...))
+     (raise-syntax-error 'list
+                         "bad list syntax"
+                         #'(stuff ...))]
 
     ; TODO enforce calls only happen in def proc?
     [(_ form0 form ... !) #'(Proc-call! (parens-no-semicolons form0 form ...))]
@@ -164,8 +180,10 @@
     [(_ or x y) #'(parens-no-semicolons if x True y)]
     ; Unary parens are fine: they're just grouping.
     [(_ x) #'x]
+    ; Two arguments is application
+    [(_ f x) #'(app (parens-no-semicolons f) (parens-no-semicolons x))]
     ; One or more arguments is curried application.
-    [(_ f x0 xs ...) #'(parens-no-semicolons (app f x0) xs ...)]))
+    [(_ f x0 xs ...) #'(parens-no-semicolons (parens-no-semicolons f x0) xs ...)]))
 
 (define/contract (app f arg) (-> procedure? any/c any/c)
   (match (sub1 (procedure-arity f))

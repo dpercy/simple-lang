@@ -115,6 +115,10 @@ limit n comp ! = match less 0 n {
 
 listEffects (limit 4 (range -3 10))
 
-
+[]
+[1]
+[1; 2]
+[1; 2;]
+[;1;;;;3]
 
 # TODO check plan - start JS VM?
