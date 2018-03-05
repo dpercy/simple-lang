@@ -13,6 +13,7 @@
          mul
          div
          mod
+         expt
          equal
          less
          lessEq
