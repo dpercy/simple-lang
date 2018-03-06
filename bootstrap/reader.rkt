@@ -30,6 +30,7 @@
 (define (make-full-readtable orig-readtable)
   (let* ([rt orig-readtable]
          [rt (make-significant-semicolon-readtable rt)]
+         [rt (make-comma-readtable rt)]
          [rt (make-significant-newline-readtable rt)])
     rt))
 (module+ test
@@ -46,8 +47,15 @@
                   'terminating-macro
                   (lambda (char in src ln col pos)
                     ;; TODO include srcloc
-                    '\;))
-  )
+                    '\;)))
+
+(define (make-comma-readtable orig-readtable)
+  (make-readtable orig-readtable
+                  #\,
+                  'terminating-macro
+                  (lambda (char in src ln col pos)
+                    ;; TODO include srcloc
+                    '\,)))
 (module+ test
   (check-equal? (syntax->datum (parameterize ([current-readtable (make-significant-semicolon-readtable (current-readtable))])
                                  (call-with-input-string "(1;2;)"

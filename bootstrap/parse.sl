@@ -81,8 +81,8 @@ check runParser (either (fail "derp") (return 2)) "input" = Parsed 2 "input"
 check runParser (either (fail "derp") (fail "doop")) "input" = Fail "doop"
 
 alternatives parsers = list.foldr1 either parsers
-check runParser (alternatives [fail "a"; return 1; fail "c"]) "input" = Parsed 1 "input"
-check runParser (alternatives [fail "a"; fail "b"; fail "c"]) "input" = Fail "c"
+check runParser (alternatives [fail "a", return 1, fail "c"]) "input" = Parsed 1 "input"
+check runParser (alternatives [fail "a", fail "b", fail "c"]) "input" = Fail "c"
 
 
 # return is a very general procedure:

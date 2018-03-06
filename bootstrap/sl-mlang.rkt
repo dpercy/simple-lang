@@ -140,7 +140,7 @@
 (define-syntax parens-no-semicolons
   (syntax-parser
     ; TODO better syntax for: if, and, or?
-    #:datum-literals (match ! |;| #%braces #%brackets if and or)
+    #:datum-literals (match ! |;| |,| #%braces #%brackets if and or)
     [(_ (#%braces
          ; Grab "fragments" (consecutive readable non-semicolons),
          ; separated by semicolons.
@@ -158,9 +158,9 @@
          ; Grab "fragments" (consecutive readable non-semicolons),
          ; separated by semicolons.
          ; Parse each fragment as an expression.
-         \; ...
-         (~seq (~and (~not \;) fragments) ...+ \; ...+) ...
-         (~and (~not \;) trailing) ...+
+         (~or \; \,) ...
+         (~seq (~and (~not \;) (~not \,) fragments) ...+ (~or \; \,) ...+) ...
+         (~and (~not \;) (~not \,) trailing) ...+
          \; ...))
      #'(list (parens-no-semicolons fragments ...) ...
              (parens-no-semicolons trailing ...))]
