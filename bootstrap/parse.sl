@@ -69,7 +69,11 @@ either left right ! = match capture left {
 # passthrough cases
   Done v => v
   Perform eff k => {
-# re-throw the effect
+# re-throw the effect - TODO is this why effects escape the "try" ?
+#  - maybe instead, do the "amb" thing:
+#    - effect for fail
+#    - effect for choice
+#    - either is just choose-then-run?
     v = perform eff !
 # continue with what we got,
 # still covered by the same handler
@@ -79,6 +83,13 @@ either left right ! = match capture left {
 check runParser (either (return 1) (return 2)) "input" = Parsed 1 "input"
 check runParser (either (fail "derp") (return 2)) "input" = Parsed 2 "input"
 check runParser (either (fail "derp") (fail "doop")) "input" = Fail "doop"
+
+seq x y ! = {
+  x !
+  y !
+}
+check runParser (seq get get) "input" = Parsed "n" "put"
+check runParser (either (seq get (fail "derp")) (return 1)) "input" = Parsed 1 "input"
 
 alternatives parsers = list.foldr1 either parsers
 check runParser (alternatives [fail "a", return 1, fail "c"]) "input" = Parsed 1 "input"
@@ -156,9 +167,28 @@ check stringToNumber 0 "123" = 123
 
 
 parseExpr ! = {
+  f = parseArg !
+# TODO when parseCall fails, the state isn't rolled back??
+  either (parseCall f) (return f) !
+}
+
+parseCall f ! = {
+  a = parseArg !
+  core.App f a
+}
+
+parseArg ! = {
   n = lex !
   match n {
     TokNumber n => core.Quote (stringToNumber 0 n)
+    TokOpenParen => {
+      e = parseExpr !
+      t = lex !
+      match t {
+#TokCloseParen => e
+      }
+    }
+    t => fail "unexpected token" !
   }
 }
 
@@ -172,6 +202,12 @@ parse s = runParser (skipWhitespaceAfter parseExpr) s
 
 
 check parse " 123 " = Parsed (core.Quote 123) ""
+check parse " 1 2 " = Parsed (core.App (core.Quote 1) (core.Quote 2)) ""
+check runParser parseArg "1)" = Parsed (core.Quote 1) ")"
+check runParser parseExpr "1)" = Parsed (core.Quote 1) ")"
+runParser (either (return 4) (parseCall 4)) ")"
+runParser (either (parseCall 4) (return 4)) ")"
+#check parse " (123 456) " = Parsed (core.App (core.Quote 123) (core.Quote 456)) ""
 
 
 # Try writing imports as footnotes
