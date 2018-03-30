@@ -14,7 +14,6 @@ Equation = head:Id args:(_ Id)* _ "=" _ body:Expression {
   };
 }
 
-// TODO match expressions
 Expression = Match / Call
 
 Match = "match" _ scrut:Expression _ "{" _line cases:(Case _line)* "}" {
@@ -25,12 +24,23 @@ Match = "match" _ scrut:Expression _ "{" _line cases:(Case _line)* "}" {
   };
 }
 
-// TODO pattern, not expr
-Case = lhs:Expression _ "->" (_line) rhs:Expression {
+Case = lhs:Pattern _ "->" (_line) rhs:Expression {
   return {
     type: "Case",
     lhs: lhs,
     rhs: rhs,
+  };
+}
+
+Pattern = PatCall
+PatCall = PatHole / PatCtor
+PatArg = PatHole / "(" _ c:PatCall _ ")" { return c }
+PatHole = name:Id { return { type: "PatHole", name: name } }
+PatCtor = name:Ctor args:(_ PatArg)* {
+  return {
+    type: "PatCtor",
+    name: name,
+    args: args.map(x=>x[1]),
   };
 }
 
@@ -43,6 +53,7 @@ Call = f:Arg xs:(_ Arg)* {
 }
 
 Arg = name:Id { return { type: "Id", name: name } }
+    / name:Ctor { return { type: "Ctor", name: name } }
     / num:Num { return { type: "Num", literal: num } }
     / "(" _ e:Expression _ ")" { return e }
 
@@ -50,8 +61,7 @@ Arg = name:Id { return { type: "Id", name: name } }
 _ "whitespace" = [ \t\r]*
 _line "newline" = [ \t\r\n]*
 
-Id "identifier" = first:[a-zA-Z_] rest:[a-zA-Z_0-9]* {
-  return text();
-}
+Id "identifier" = first:[a-z] rest:[a-zA-Z_0-9]* { return text() }
+Ctor "constructor" = first:[A-Z] rest:[a-zA-Z_0-9]* { return text() }
 
 Num "number" = "-"? [0-9]+ { return text(); }
