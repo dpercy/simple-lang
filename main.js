@@ -13,15 +13,16 @@ function run(program) {
             throw new Error("TODO definitions...");
         }
     }
-    return program.map(runExpr);
+    const emptyEnv = {};
+    return program.map(expr => runExpr(expr, emptyEnv));
 }
 
 /*
 What do values look like?
 - number
-- JS function (like a code pointer)
-- user-defined function
-- closure
+- JS function (primitive code pointer)
+- Lambda (symbolic, user-defined code pointer)
+- Closure
 */
 class Closure {
     // TODO this class could be specialized: closure1, closure2, etc
@@ -31,6 +32,13 @@ class Closure {
     }
     show() {
         return "(" + [this.func].concat(this.args).map(show).join(" ") + ")";
+    }
+}
+class Lambda {
+    constructor(name, params, body) {
+        this.name = name;
+        this.params = params;
+        this.body = body;
     }
 }
 function show(v) {
@@ -43,19 +51,26 @@ function show(v) {
     }
 }
 
-function runExpr(expr) {
+function runExpr(expr, env) {
     switch (expr.type) {
     case "Num": return +expr.literal;
     case "Id":
         switch (expr.name) {
         case "add": return add;
-        default: throw new Error("unbound Id: " + expr.name);
+        case "double": return exampleLambdaDouble;
+        default: {
+            if (Object.hasOwnProperty.call(env, expr.name)) {
+                return env[expr.name];
+            } else {
+                throw new Error("unbound Id: " + expr.name);
+            }
+        }
         }
     case "App": {
         // TODO multi-arg call optimization
         const { func, arg } = expr;
-        const f = runExpr(func);
-        const x = runExpr(arg);
+        const f = runExpr(func, env);
+        const x = runExpr(arg, env);
         return apply1(f, x);
     }
     default: throw new Error("bad expr type: " + expr.type);
@@ -68,11 +83,25 @@ function add(x, y) {
     return x + y;
 }
 
+exampleLambdaDouble = new Lambda(
+    "double",
+    ["x"],
+    {
+        type: "App",
+        func: {
+            type: "App",
+            func: { type: "Id", name: "add" },
+            arg: { type: "Id", name: "x" },
+        },
+        arg: { type: "Id", name: "x" },
+    }
+);
+
 function apply1(f, x) {
     if (typeof f === 'function') {
         switch (f.length) {
         case 0: throw new Error("zero arity function??");
-        case 1: return f(x);
+        case 1: return doTheCall(f, [x]);
         default: return new Closure(f, [x]);
         }
     } else if (f instanceof Closure) {
@@ -81,12 +110,36 @@ function apply1(f, x) {
         if (newArgs.length < func.length) {
             return new Closure(func, newArgs);
         } else {
-            // TODO what if func is not a prim? then push explicit stack frame.
-            return func.apply(null, newArgs);
+            return doTheCall(func, newArgs);
         }
+    } else if (f instanceof Lambda) {
+        return doTheCall(f, [x]);
     } else {
         throw new Error("TODO deal with errors: call non-function");
     }
+}
+
+// actually execute a multi-arg call; don't create a closure
+function doTheCall(func, args) {
+    if (typeof func === 'function') {
+        return func.apply(null, args);
+    } else if (func instanceof Lambda) {
+        const env = makeEnv(func.params, args);
+
+        // TODO avoid using JS stack here...
+        return runExpr(func.body, env);
+        
+    } else {
+        throw new Error("internal error: doTheCall got a non-function");
+    }
+}
+
+function makeEnv(params, args) {
+    const env = {};
+    for (let i=0; i<params.length; ++i) {
+        env[params[i]] = args[i];
+    }
+    return env;
 }
 
 if (require.main === module) {
