@@ -16,120 +16,78 @@ function run(program) {
     return program.map(runExpr);
 }
 
-function runExpr(expr) {
-    let m = newMachine(expr);
-    while (!isFinal(m)) {
-        m = step(m);
+/*
+What do values look like?
+- number
+- JS function (like a code pointer)
+- user-defined function
+- closure
+*/
+class Closure {
+    // TODO this class could be specialized: closure1, closure2, etc
+    constructor(func, args) {
+        this.func = func;
+        this.args = args;
     }
-    return m.expr;
+    show() {
+        return "(" + [this.func].concat(this.args).map(show).join(" ") + ")";
+    }
+}
+function show(v) {
+    if (v.show) {
+        return v.show();
+    } else if (v.name) {
+        return v.name;
+    } else {
+        return v.toString();
+    }
 }
 
-function newMachine(expr) {
-    return {
-        expr: expr,
-        isValue: false,
-        nargs: 0,
-        stack: [],
-    };
-}
-
-function isFinal(machine) {
-    return machine.stack.length === 0 && machine.isValue;
-}
-
-function step(machine) {
-    if (machine.isValue) {
-        // step up
-        if (machine.stack.length === 0)
-            throw new Error("stack underflow");
-        const [frame, ...stack] = machine.stack;
-        switch (frame.type) {
-        case "FrameFunc": {
-            const { nargs, func } = frame;
-            const newFrame = {
-                type: "FrameArg",
-                arg: machine.expr,
-            };
-            return {
-                expr: func,
-                isValue: false,
-                nargs: nargs + 1,
-                stack: [newFrame, ...stack],
-            };
+function runExpr(expr) {
+    switch (expr.type) {
+    case "Num": return +expr.literal;
+    case "Id":
+        switch (expr.name) {
+        case "add": return add;
+        default: throw new Error("unbound Id: " + expr.name);
         }
-        case "FrameArg": {
-            throw new Error("what happens here?");
+    case "App": {
+        // TODO multi-arg call optimization
+        const { func, arg } = expr;
+        const f = runExpr(func);
+        const x = runExpr(arg);
+        return apply1(f, x);
+    }
+    default: throw new Error("bad expr type: " + expr.type);
+    }
+}
+
+function add(x, y) {
+    if (typeof x !== 'number' || typeof y !== 'number')
+        throw new Error("TODO deal with errors: add non-number");
+    return x + y;
+}
+
+function apply1(f, x) {
+    if (typeof f === 'function') {
+        switch (f.length) {
+        case 0: throw new Error("zero arity function??");
+        case 1: return f(x);
+        default: return new Closure(f, [x]);
         }
-        default: throw new Error("bad frame type: " + frame.type);
+    } else if (f instanceof Closure) {
+        const { func, args } = f;
+        const newArgs = args.concat([x]);
+        if (newArgs.length < func.length) {
+            return new Closure(func, newArgs);
+        } else {
+            // TODO what if func is not a prim? then push explicit stack frame.
+            return func.apply(null, newArgs);
         }
     } else {
-        // step down
-        switch (machine.expr.type) {
-        case "Num": return { ...machine, isValue: true };
-        case "App": {
-            const { nargs, stack, expr: { func, arg } } = machine;
-            const newFrame = {
-                type: "FrameFunc",
-                nargs,
-                func,
-            };
-            return {
-                expr: arg,
-                isValue: false,
-                nargs: 0,
-                stack: [newFrame, ...stack],
-            };
-        }
-        case "Id": {
-            const { nargs, stack, expr: { name } } = machine;
-            // TODO use an env instead
-            switch (name) {
-            case "add": {
-                switch (nargs) {
-                case 0: return { ...machine, isValue: true };
-                case 1: {
-                    // make a closure
-                    const [ { arg }, ...rest ] = stack;
-                    return {
-                        expr: {
-                            type: "App",
-                            func: machine.expr,
-                            arg,
-                        },
-                        isValue: true,
-                        nargs: null,
-                        stack: rest,
-                    };
-                }
-                default: {
-                    const [ { arg: x }, { arg: y }, ...rest ] = stack;
-                    return {
-                        expr: doAdd(x, y),
-                        isValue: true,
-                        nargs: null,
-                        stack: rest,
-                    };
-                }
-                }
-            }
-            default: throw new Error("unbound Id: " + name);
-            }
-        }
-        default: throw new Error("bad expr type: " + machine.expr.type);
-        }
+        throw new Error("TODO deal with errors: call non-function");
     }
 }
-
-function doAdd(x, y) {
-    if (x.type !== "Num" || y.type !== "Num")
-        throw new Error("TODO prim error add non-num");
-    // TODO do correct arithmetic
-    return {
-        type: "Num",
-        literal: "" + ((+x.literal) + (+y.literal)),
-    };
-}
-
 
 if (require.main === module) {
     const [_node, _main, ...args] = process.argv;
@@ -140,6 +98,8 @@ if (require.main === module) {
         const text = fs.readFileSync(filename).toString();
         const program = parser.parse(text);
         const result = run(program);
-        console.log(result);
+        for (const val of result) {
+            console.log(show(val));
+        }
     }
 }
