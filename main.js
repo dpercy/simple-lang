@@ -15,6 +15,7 @@ function run(program) {
     }
     const emptyArgs = [];
     const emptyEnv = {};
+    const emptyK = (v => v);
     return program.map(expr => runExpr(expr, emptyArgs, emptyEnv, emptyK));
 }
 
@@ -52,13 +53,14 @@ function show(v) {
     }
 }
 
-
 function runExpr(expr, args, env, k) {
     switch (expr.type) {
-    case "Num": return ret(k, +expr.literal);
+    case "Num": return k(+expr.literal);
     case "App": {
         const { func, arg } = expr;
-        const argK = makeArgK(func, args, env, k);
+        const argK = (argV) => {
+            return runExpr(func, [argV, ...args], env, k);
+        };
         return runExpr(arg, [], env, argK);
     };
     case "Id": {
@@ -70,11 +72,11 @@ function runExpr(expr, args, env, k) {
 }
 function applyValArgs(val, args, k) {
     if (args.length === 0) {
-        // just a lookup; not actually an application
-        return ret(k, val);
+            // just a lookup; not actually an application
+        return k(val);
     } else if (typeof val === 'function') {
         if (val.length > args.length) {
-            return ret(k, new Closure(val, args));
+            return k(new Closure(val, args));
         } else {
             const enoughArgs = args.slice(0, val.length);
             const extraArgs  = args.slice(val.length);
@@ -82,7 +84,7 @@ function applyValArgs(val, args, k) {
         }
     } else if (val instanceof Lambda) {
         if (val.params.length > args.length) {
-            return ret(k, new Closure(val, args));
+            return k(new Closure(val, args));
         } else {
             const enoughArgs = args.slice(0, val.params.length);
             const extraArgs  = args.slice(val.params.length);
@@ -98,24 +100,6 @@ function applyValArgs(val, args, k) {
         throw new Error("TODO handle errors: apply non-function: " + show(val));
     }
 }
-function ret(k, v) {
-    switch (k.type) {
-    case "EmptyK": return v;
-    case "ArgK": {
-        const { func, args, env, k: restK } = k;
-        return runExpr(func, [v, ...args], env, restK);
-    }
-    default: throw new Error("bad K type");
-    }
-}
-const emptyK = { type: "EmptyK" };
-function makeArgK(func, args, env, k) {
-    return {
-        type: "ArgK",
-        func, args, env, k
-    }
-}
-
 
 function lookup(name, env) {
     switch (name) {
