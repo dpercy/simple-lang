@@ -14,7 +14,8 @@ function run(program) {
         }
     }
     const emptyEnv = {};
-    return program.map(expr => runExpr(expr, emptyEnv));
+    const emptyK = (v => v);
+    return program.map(expr => runExpr(expr, emptyEnv, emptyK));
 }
 
 /*
@@ -51,16 +52,16 @@ function show(v) {
     }
 }
 
-function runExpr(expr, env) {
+function runExpr(expr, env, k) {
     switch (expr.type) {
-    case "Num": return +expr.literal;
+    case "Num": return k(+expr.literal);
     case "Id":
         switch (expr.name) {
-        case "add": return add;
-        case "double": return exampleLambdaDouble;
+        case "add": return k(add);
+        case "double": return k(exampleLambdaDouble);
         default: {
             if (Object.hasOwnProperty.call(env, expr.name)) {
-                return env[expr.name];
+                return k(env[expr.name]);
             } else {
                 throw new Error("unbound Id: " + expr.name);
             }
@@ -69,9 +70,11 @@ function runExpr(expr, env) {
     case "App": {
         // TODO multi-arg call optimization
         const { func, arg } = expr;
-        const f = runExpr(func, env);
-        const x = runExpr(arg, env);
-        return apply1(f, x);
+        return runExpr(func, env, (f) => {
+            return runExpr(arg, env, (x) => {
+                return apply1(f, x, k);
+            });
+        });
     }
     default: throw new Error("bad expr type: " + expr.type);
     }
@@ -97,37 +100,37 @@ exampleLambdaDouble = new Lambda(
     }
 );
 
-function apply1(f, x) {
+function apply1(f, x, k) {
     if (typeof f === 'function') {
         switch (f.length) {
         case 0: throw new Error("zero arity function??");
-        case 1: return doTheCall(f, [x]);
-        default: return new Closure(f, [x]);
+        case 1: return doTheCall(f, [x], k);
+        default: return k(new Closure(f, [x]));
         }
     } else if (f instanceof Closure) {
         const { func, args } = f;
         const newArgs = args.concat([x]);
         if (newArgs.length < func.length) {
-            return new Closure(func, newArgs);
+            return k(new Closure(func, newArgs));
         } else {
-            return doTheCall(func, newArgs);
+            return doTheCall(func, newArgs, k);
         }
     } else if (f instanceof Lambda) {
-        return doTheCall(f, [x]);
+        return doTheCall(f, [x], k);
     } else {
         throw new Error("TODO deal with errors: call non-function");
     }
 }
 
 // actually execute a multi-arg call; don't create a closure
-function doTheCall(func, args) {
+function doTheCall(func, args, k) {
     if (typeof func === 'function') {
-        return func.apply(null, args);
+        return k(func.apply(null, args));
     } else if (func instanceof Lambda) {
         const env = makeEnv(func.params, args);
 
         // TODO avoid using JS stack here...
-        return runExpr(func.body, env);
+        return runExpr(func.body, env, k);
         
     } else {
         throw new Error("internal error: doTheCall got a non-function");
