@@ -16,7 +16,7 @@ function run(program) {
     const emptyArgs = [];
     const emptyEnv = {};
     const emptyK = (v => v);
-    return program.map(expr => runExpr(expr, emptyArgs, emptyEnv, emptyK));
+    return program.map(expr => compileExpr(expr)(emptyArgs, emptyEnv, emptyK));
 }
 
 /*
@@ -41,6 +41,7 @@ class Lambda {
         this.name = name;
         this.params = params;
         this.body = body;
+        this.bodyDenot = compileExpr(body);
     }
 }
 function show(v) {
@@ -53,26 +54,34 @@ function show(v) {
     }
 }
 
-function runExpr(expr, args, env, k) {
+function compileExpr(expr) {
     switch (expr.type) {
-    case "Num": return k(+expr.literal);
-    case "App": {
-        const { func, arg } = expr;
-        const argK = (argV) => {
-            return runExpr(func, [argV, ...args], env, k);
+    case "Num": {
+        const val = +expr.literal;
+        return function(args, env, k) {
+            return k(val);
         };
-        return runExpr(arg, [], env, argK);
-    };
-    case "Id": {
-        const val = lookup(expr.name, env);
-        return applyValArgs(val, args, k);
     }
-    default: throw new Error("bad expr type: " + expr.type);
+    case "App":
+        const { func, arg } = expr;
+        const funcDenot = compileExpr(func);
+        const argDenot = compileExpr(arg);
+        return function(args, env, k) {
+            const argK = (argV) => funcDenot([argV, ...args], env, k);
+            return argDenot([], env, argK);
+        };
+    case "Id":
+        return function(args, env, k) {
+            const val = lookup(expr.name, env);
+            return applyValArgs(val, args, k);
+        }
+    default:
+        throw new Error("bad expr type: " + expr.type);
     }
 }
 function applyValArgs(val, args, k) {
     if (args.length === 0) {
-            // just a lookup; not actually an application
+        // just a lookup; not actually an application
         return k(val);
     } else if (typeof val === 'function') {
         if (val.length > args.length) {
@@ -92,7 +101,7 @@ function applyValArgs(val, args, k) {
             for (let i=0; i<val.params.length; ++i) {
                 env[val.params[i]] = enoughArgs[i];
             }
-            return runExpr(val.body, extraArgs, env, k);
+            return val.bodyDenot(extraArgs, env, k);
         }
     } else if (val instanceof Closure) {
         return applyValArgs(val.func, val.args.concat(args), k);
