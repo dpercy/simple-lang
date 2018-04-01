@@ -13,9 +13,10 @@ function run(program) {
             throw new Error("TODO definitions...");
         }
     }
+    const emptyArgs = [];
     const emptyEnv = {};
     const emptyK = (v => v);
-    return program.map(expr => runExpr(expr, emptyEnv, emptyK));
+    return program.map(expr => runExpr(expr, emptyArgs, emptyEnv, emptyK));
 }
 
 /*
@@ -52,31 +53,65 @@ function show(v) {
     }
 }
 
-function runExpr(expr, env, k) {
+function runExpr(expr, args, env, k) {
     switch (expr.type) {
     case "Num": return k(+expr.literal);
-    case "Id":
-        switch (expr.name) {
-        case "add": return k(add);
-        case "double": return k(exampleLambdaDouble);
-        default: {
-            if (Object.hasOwnProperty.call(env, expr.name)) {
-                return k(env[expr.name]);
-            } else {
-                throw new Error("unbound Id: " + expr.name);
-            }
-        }
-        }
     case "App": {
-        // TODO multi-arg call optimization
         const { func, arg } = expr;
-        return runExpr(func, env, (f) => {
-            return runExpr(arg, env, (x) => {
-                return apply1(f, x, k);
-            });
-        });
+        const argK = (argV) => {
+            return runExpr(func, [argV, ...args], env, k);
+        };
+        return runExpr(arg, [], env, argK);
+    };
+    case "Id": {
+        const val = lookup(expr.name, env);
+        return applyValArgs(val, args, k);
     }
     default: throw new Error("bad expr type: " + expr.type);
+    }
+}
+function applyValArgs(val, args, k) {
+    if (args.length === 0) {
+            // just a lookup; not actually an application
+        return k(val);
+    } else if (typeof val === 'function') {
+        if (val.length > args.length) {
+            return k(new Closure(val, args));
+        } else {
+            const enoughArgs = args.slice(0, val.length);
+            const extraArgs  = args.slice(val.length);
+            return applyValArgs(val.apply(null, enoughArgs), extraArgs, k);
+        }
+    } else if (val instanceof Lambda) {
+        if (val.params.length > args.length) {
+            return k(new Closure(val, args));
+        } else {
+            const enoughArgs = args.slice(0, val.params.length);
+            const extraArgs  = args.slice(val.params.length);
+            const env = {};
+            for (let i=0; i<val.params.length; ++i) {
+                env[val.params[i]] = enoughArgs[i];
+            }
+            return runExpr(val.body, extraArgs, env, k);
+        }
+    } else if (val instanceof Closure) {
+        return applyValArgs(val.func, val.args.concat(args), k);
+    } else {
+        throw new Error("TODO handle errors: apply non-function: " + show(val));
+    }
+}
+
+function lookup(name, env) {
+    switch (name) {
+    case "add": return add;
+    case "double": return exampleLambdaDouble;
+    default: {
+        if (Object.hasOwnProperty.call(env, name)) {
+            return env[name];
+        } else {
+            throw new Error("unbound Id: " + name);
+        }
+    }
     }
 }
 
@@ -99,51 +134,6 @@ exampleLambdaDouble = new Lambda(
         arg: { type: "Id", name: "x" },
     }
 );
-
-function apply1(f, x, k) {
-    if (typeof f === 'function') {
-        switch (f.length) {
-        case 0: throw new Error("zero arity function??");
-        case 1: return doTheCall(f, [x], k);
-        default: return k(new Closure(f, [x]));
-        }
-    } else if (f instanceof Closure) {
-        const { func, args } = f;
-        const newArgs = args.concat([x]);
-        if (newArgs.length < func.length) {
-            return k(new Closure(func, newArgs));
-        } else {
-            return doTheCall(func, newArgs, k);
-        }
-    } else if (f instanceof Lambda) {
-        return doTheCall(f, [x], k);
-    } else {
-        throw new Error("TODO deal with errors: call non-function");
-    }
-}
-
-// actually execute a multi-arg call; don't create a closure
-function doTheCall(func, args, k) {
-    if (typeof func === 'function') {
-        return k(func.apply(null, args));
-    } else if (func instanceof Lambda) {
-        const env = makeEnv(func.params, args);
-
-        // TODO avoid using JS stack here...
-        return runExpr(func.body, env, k);
-        
-    } else {
-        throw new Error("internal error: doTheCall got a non-function");
-    }
-}
-
-function makeEnv(params, args) {
-    const env = {};
-    for (let i=0; i<params.length; ++i) {
-        env[params[i]] = args[i];
-    }
-    return env;
-}
 
 if (require.main === module) {
     const [_node, _main, ...args] = process.argv;
