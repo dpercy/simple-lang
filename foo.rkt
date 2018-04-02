@@ -26,8 +26,12 @@
 #|
 
 interp, apply*, and ret all tail-call each other.
-I could 
-
+could try this:
+- make them each return a new "state" (like a trampoline)
+- wrap them in a single state-transition function
+- curry, to compile each expression to an action on the state???
+.   - maybe not worth it if JS closures are expensive
+.   - instead could translate ArgK as an object with a ret method
 |#
 (define (interp expr args env k)
   (match expr
@@ -59,11 +63,13 @@ I could
     [(? procedure?) (procedure-arity f)]
     [(Lambda params _) (length params)]))
 
+(define (run expr)
+  (interp expr '() top-env 'done))
 
 (module+ test
   (require rackunit)
 
-  (check-equal? (interp (App (App 'add 23) 1) '() top-env 'done) 24)
-  (check-equal? (interp (App 'double 23) '() top-env 'done) 46)
-  (check-equal? (interp (App (App 'twice (App 'add 3)) 2) '() top-env 'done) 8)
+  (check-equal? (run (App (App 'add 23) 1)) 24)
+  (check-equal? (run (App 'double 23)) 46)
+  (check-equal? (run (App (App 'twice (App 'add 3)) 2)) 8)
   )
