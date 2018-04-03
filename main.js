@@ -15,8 +15,8 @@ function run(program) {
     }
     const emptyArgs = [];
     const emptyEnv = {};
-    const emptyK = (v => v);
-    return program.map(expr => runExpr(expr, emptyArgs, emptyEnv, emptyK));
+    const emptyK = (v => ({ done: v }));
+    return program.map(expr => runExprTrampoline(expr, emptyArgs, emptyEnv, emptyK));
 }
 
 /*
@@ -53,22 +53,30 @@ function show(v) {
     }
 }
 
+function runExprTrampoline(expr, args, env, k) {
+    var thunk = runExpr(expr, args, env, k);
+    while (typeof thunk === 'function') {
+        thunk = thunk();
+    }
+    return thunk.done;
+}
+
 function runExpr(expr, args, env, k) {
     switch (expr.type) {
     case "Num": {
         const val = +expr.literal;
-        return applyValArgs(val, args, k);
+        return () => applyValArgs(val, args, k);
     }
     case "App": {
         const { func, arg } = expr;
         const argK = (argV) => {
-            return runExpr(func, [argV, ...args], env, k);
+            return () => runExpr(func, [argV, ...args], env, k);
         };
-        return runExpr(arg, [], env, argK);
+        return () => runExpr(arg, [], env, argK);
     };
     case "Id": {
         const val = lookup(expr.name, env);
-        return applyValArgs(val, args, k);
+        return () => applyValArgs(val, args, k);
     }
     default: throw new Error("bad expr type: " + expr.type);
     }
@@ -83,7 +91,7 @@ function applyValArgs(val, args, k) {
         } else {
             const enoughArgs = args.slice(0, val.length);
             const extraArgs  = args.slice(val.length);
-            return applyValArgs(val.apply(null, enoughArgs), extraArgs, k);
+            return () => applyValArgs(val.apply(null, enoughArgs), extraArgs, k);
         }
     } else if (val instanceof Lambda) {
         if (val.params.length > args.length) {
@@ -95,10 +103,10 @@ function applyValArgs(val, args, k) {
             for (let i=0; i<val.params.length; ++i) {
                 env[val.params[i]] = enoughArgs[i];
             }
-            return runExpr(val.body, extraArgs, env, k);
+            return () => runExpr(val.body, extraArgs, env, k);
         }
     } else if (val instanceof Closure) {
-        return applyValArgs(val.func, val.args.concat(args), k);
+        return () => applyValArgs(val.func, val.args.concat(args), k);
     } else {
         throw new Error("TODO handle errors: apply non-function: " + show(val));
     }
