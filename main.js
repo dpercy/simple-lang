@@ -13,10 +13,9 @@ function run(program) {
             throw new Error("TODO definitions...");
         }
     }
-    const emptyArgs = [];
     const emptyEnv = {};
     const emptyK = (v => v);
-    return program.map(expr => compileExpr(expr)(emptyArgs, emptyEnv, emptyK));
+    return program.map(expr => compileExpr(expr)(emptyEnv, emptyK));
 }
 
 /*
@@ -41,7 +40,7 @@ class Lambda {
         this.name = name;
         this.params = params;
         this.body = body;
-        this.bodyDenot = compileExpr(body);
+        this.compiledBody = compileExpr(body);
     }
 }
 function show(v) {
@@ -58,55 +57,60 @@ function compileExpr(expr) {
     switch (expr.type) {
     case "Num": {
         const val = +expr.literal;
-        return function(args, env, k) {
+        return function(env, k) {
             return k(val);
         };
     }
-    case "App":
-        const { func, arg } = expr;
-        const funcDenot = compileExpr(func);
-        const argDenot = compileExpr(arg);
-        return function(args, env, k) {
-            const argK = (argV) => funcDenot([argV, ...args], env, k);
-            return argDenot([], env, argK);
-        };
-    case "Id":
-        return function(args, env, k) {
-            const val = lookup(expr.name, env);
-            return applyValArgs(val, args, k);
+    case "Id": {
+        const name = expr.name;
+        return function(env, k) {
+            const val = lookup(name, env);
+            return k(val);
         }
+    }
+    case "App": {
+        const func = compileExpr(expr.func);
+        const arg = compileExpr(expr.arg);
+        return function(env, k) {
+            return arg(env, (argV) => {
+                return func(env, (funcV) => {
+                    return apply(funcV, [argV], k);
+                });
+            });
+        };
+    }
     default:
         throw new Error("bad expr type: " + expr.type);
     }
 }
-function applyValArgs(val, args, k) {
+function apply(func, args, k) {
     if (args.length === 0) {
-        // just a lookup; not actually an application
-        return k(val);
-    } else if (typeof val === 'function') {
-        if (val.length > args.length) {
-            return k(new Closure(val, args));
+        // fold this case into function and Lambda cases?
+        return k(func);
+    } else if (func instanceof Closure) {
+        return apply(func.func, func.args.concat(args), k);
+    } else if (typeof func === 'function') {
+        if (args.length >= func.length) {
+            const enoughArgs = args.slice(0, func.length);
+            const extraArgs = args.slice(func.length);
+            const result = func.apply(null, enoughArgs);
+            return apply(result, extraArgs, k);
         } else {
-            const enoughArgs = args.slice(0, val.length);
-            const extraArgs  = args.slice(val.length);
-            return applyValArgs(val.apply(null, enoughArgs), extraArgs, k);
+            return k(new Closure(func, args));
         }
-    } else if (val instanceof Lambda) {
-        if (val.params.length > args.length) {
-            return k(new Closure(val, args));
+    } else if (func instanceof Lambda) {
+        if (args.length >= func.params.length) {
+            const enoughArgs = args.slice(0, func.params.length);
+            const extraArgs = args.slice(func.params.length);
+            const env = makeEnv(func.params, enoughArgs);
+            return func.compiledBody(env, (result) => {
+                return apply(result, extraArgs, k);
+            });
         } else {
-            const enoughArgs = args.slice(0, val.params.length);
-            const extraArgs  = args.slice(val.params.length);
-            const env = {};
-            for (let i=0; i<val.params.length; ++i) {
-                env[val.params[i]] = enoughArgs[i];
-            }
-            return val.bodyDenot(extraArgs, env, k);
+            return k(new Closure(func, args));
         }
-    } else if (val instanceof Closure) {
-        return applyValArgs(val.func, val.args.concat(args), k);
     } else {
-        throw new Error("TODO handle errors: apply non-function: " + show(val));
+        throw new Error("TODO handle errors: apply non-function");
     }
 }
 
@@ -114,6 +118,7 @@ function lookup(name, env) {
     switch (name) {
     case "add": return add;
     case "double": return exampleLambdaDouble;
+    case "twice": return exampleLambdaTwice;
     default: {
         if (Object.hasOwnProperty.call(env, name)) {
             return env[name];
@@ -122,6 +127,13 @@ function lookup(name, env) {
         }
     }
     }
+}
+function makeEnv(params, args) {
+    const env = {};
+    for (let i=0; i<params.length; ++i) {
+        env[params[i]] = args[i];
+    }
+    return env;
 }
 
 function add(x, y) {
@@ -141,6 +153,19 @@ exampleLambdaDouble = new Lambda(
             arg: { type: "Id", name: "x" },
         },
         arg: { type: "Id", name: "x" },
+    }
+);
+exampleLambdaTwice = new Lambda(
+    "twice",
+    ["f", "x"],
+    {
+        type: "App",
+        func: { type: "Id", name: "f" },
+        arg: {
+            type: "App",
+            func: { type: "Id", name: "f" },
+            arg: { type: "Id", name: "x" },
+        },
     }
 );
 
