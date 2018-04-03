@@ -108,6 +108,7 @@ function lookup(name, env) {
     switch (name) {
     case "add": return add;
     case "double": return exampleLambdaDouble;
+    case "twice": return exampleLambdaTwice;
     default: {
         if (Object.hasOwnProperty.call(env, name)) {
             return env[name];
@@ -135,6 +136,19 @@ exampleLambdaDouble = new Lambda(
             arg: { type: "Id", name: "x" },
         },
         arg: { type: "Id", name: "x" },
+    }
+);
+exampleLambdaTwice = new Lambda(
+    "twice",
+    ["f", "x"],
+    {
+        type: "App",
+        func: { type: "Id", name: "f" },
+        arg: {
+            type: "App",
+            func: { type: "Id", name: "f" },
+            arg: { type: "Id", name: "x" },
+        },
     }
 );
 
