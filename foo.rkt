@@ -16,6 +16,11 @@
 ; 'done
 (struct ArgK (f args env k) #:transparent)
 
+; states
+(struct StateInterp (expr args env k) #:transparent)
+(struct StateApply (f args k) #:transparent)
+(struct StateDone (v) #:transparent)
+
 (define top-env
   (hash 'add (lambda (x y) (+ x y))
         'double (Lambda '(x) (App (App 'add 'x) 'x))
@@ -25,46 +30,55 @@
 
 #|
 
-interp, apply*, and ret all tail-call each other.
-could try this:
-- make them each return a new "state" (like a trampoline)
-- wrap them in a single state-transition function
-- curry, to compile each expression to an action on the state???
-.   - maybe not worth it if JS closures are expensive
-.   - instead could translate ArgK as an object with a ret method
+conceptually, interp, apply*, and ret all tail-call each other.
+but actually, they are trampolined:
+they return a State telling you which one to call next.
+
+step takes a state and gives you a new state.
+it could be a done state.
 |#
+(define (step state)
+  (match state
+    [(StateInterp expr args env k) (interp expr args env k)]
+    [(StateApply f args k) (apply* f args k)]))
 (define (interp expr args env k)
   (match expr
-    [(? number? n) (apply* n args k)]
-    [(? symbol? x) (apply* (hash-ref env x) args k)]
-    [(App f x) (interp x '() env
-                       (ArgK f args env k)
-                       )]))
+    [(? number? n) (StateApply n args k)]
+    [(? symbol? x) (StateApply (hash-ref env x) args k)]
+    [(App f x) (StateInterp x '() env
+                            (ArgK f args env k)
+                            )]))
 (define (apply* f args k)
   (match args
     ['() (ret k f)]
     [_
      (match f
-       [(Closure cl-f cl-args) (apply* cl-f (append cl-args args) k)]
+       [(Closure cl-f cl-args) (StateApply cl-f (append cl-args args) k)]
        [_ #:when (> (arity f) (length args))
           (ret k (Closure f args))]
        [(? procedure?) (ret k (apply f args))]
-       [(Lambda params body) (interp body
-                                     (drop args (length params))
-                                     (for/fold ([h top-env]) ([p params] [a args])
-                                       (hash-set h p a))
-                                     k)])]))
+       [(Lambda params body) (StateInterp body
+                                          (drop args (length params))
+                                          (for/fold ([h top-env]) ([p params] [a args])
+                                            (hash-set h p a))
+                                          k)])]))
 (define (ret k v)
   (match k
-    ['done v]
-    [(ArgK f args env k) (interp f (cons v args) env k)]))
+    ['done (StateDone v)]
+    [(ArgK f args env k) (StateInterp f (cons v args) env k)]))
 (define (arity f)
   (match f
     [(? procedure?) (procedure-arity f)]
     [(Lambda params _) (length params)]))
 
+
 (define (run expr)
-  (interp expr '() top-env 'done))
+  (run* (StateInterp expr '() top-env 'done)))
+(define (run* state)
+  (match (step state)
+    [(StateDone v) v]
+    [state (run* state)]))
+
 
 (module+ test
   (require rackunit)
