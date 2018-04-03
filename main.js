@@ -55,7 +55,10 @@ function show(v) {
 
 function runExpr(expr, args, env, k) {
     switch (expr.type) {
-    case "Num": return k(+expr.literal);
+    case "Num": {
+        const val = +expr.literal;
+        return applyValArgs(val, args, k);
+    }
     case "App": {
         const { func, arg } = expr;
         const argK = (argV) => {
