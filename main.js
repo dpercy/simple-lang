@@ -8,15 +8,20 @@ function run(program) {
     // returns a new program ast where:
     //  - top-level expressions have been reduced to a value
     //  - definitions with no arguments have been reduced to a value
-    for (const s of program) {
-        if (s.type === "Def") {
-            throw new Error("TODO definitions...");
-        }
-    }
+    const defs = program.filter(stmt => stmt.type === "Def");
+    const exprs = program.filter(stmt => stmt.type !== "Def");
+
+    // TODO parse globals instead
+    const globals = {
+        double: exampleLambdaDouble,
+        twice: exampleLambdaTwice,
+        add: add,
+    };
+    
     const emptyArgs = [];
     const emptyEnv = {};
     const emptyK = (v => ({ done: v }));
-    return program.map(expr => runExprTrampoline(expr, emptyArgs, emptyEnv, emptyK));
+    return exprs.map(expr => runExprTrampoline(expr, emptyArgs, emptyEnv, globals, emptyK));
 }
 
 /*
@@ -53,15 +58,15 @@ function show(v) {
     }
 }
 
-function runExprTrampoline(expr, args, env, k) {
-    var thunk = runExpr(expr, args, env, k);
+function runExprTrampoline(expr, args, env, globals, k) {
+    var thunk = runExpr(expr, args, env, globals, k);
     while (typeof thunk === 'function') {
         thunk = thunk();
     }
     return thunk.done;
 }
 
-function runExpr(expr, args, env, k) {
+function runExpr(expr, args, env, globals, k) {
     switch (expr.type) {
     case "Num": {
         const val = +expr.literal;
@@ -70,12 +75,12 @@ function runExpr(expr, args, env, k) {
     case "App": {
         const { func, arg } = expr;
         const argK = (argV) => {
-            return () => runExpr(func, [argV, ...args], env, k);
+            return () => runExpr(func, [argV, ...args], env, globals, k);
         };
-        return () => runExpr(arg, [], env, argK);
+        return () => runExpr(arg, [], env, globals, argK);
     };
     case "Id": {
-        const val = lookup(expr.name, env);
+        const val = lookup(expr.name, env, globals);
         return () => applyValArgs(val, args, k);
     }
     default: throw new Error("bad expr type: " + expr.type);
@@ -103,7 +108,11 @@ function applyValArgs(val, args, k) {
             for (let i=0; i<val.params.length; ++i) {
                 env[val.params[i]] = enoughArgs[i];
             }
-            return () => runExpr(val.body, extraArgs, env, k);
+            //TODO seems like you shouldn't need globals in this apply function...
+            // but you do need to call runExpr. what's going on?
+            // Maybe because these "globals" are actually module-level,
+            // and lambdas should close over them.
+            return () => runExpr(val.body, extraArgs, env, globals, k);
         }
     } else if (val instanceof Closure) {
         return () => applyValArgs(val.func, val.args.concat(args), k);
@@ -112,18 +121,13 @@ function applyValArgs(val, args, k) {
     }
 }
 
-function lookup(name, env) {
-    switch (name) {
-    case "add": return add;
-    case "double": return exampleLambdaDouble;
-    case "twice": return exampleLambdaTwice;
-    default: {
-        if (Object.hasOwnProperty.call(env, name)) {
-            return env[name];
-        } else {
-            throw new Error("unbound Id: " + name);
-        }
-    }
+function lookup(name, env, globals) {
+    if (Object.hasOwnProperty.call(env, name)) {
+        return env[name];
+    } else if (Object.hasOwnProperty.call(globals, name)) {
+        return globals[name];
+    } else {
+        throw new Error("unbound Id: " + name);
     }
 }
 
