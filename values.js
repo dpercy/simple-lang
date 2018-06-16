@@ -107,6 +107,11 @@ class Case {
     constructor(pattern, expr) { this.pattern = pattern; this.expr = expr; }
 }
 
+class Pattern {}
+class PLiteral extends Pattern {
+    constructor(value) { super(); this.value = value; }
+}
+// TODO pattern structs
 
 /*
 App1 Expr Env
@@ -171,9 +176,26 @@ class ValueState extends State {
                 default: throw 'bad tag';
                 }
             }; throw "fell out";
-            case Match0: throw 'TODO match';
+            case Match0: {
+                var scrut = this.currentValue;
+                var cases = frame.cases;
+                for (var case_ of cases) {
+                    // TODO allow checkMatch to return variable bindings
+                    if (checkMatch(case_.pattern, scrut)) {
+                        return new ExprState(case_.expr, frame.env, stack, this.globals);
+                    }
+                }
+                throw "TODO transition to no-match-case error";
+            }; throw "fell out";
             default: throw "no case";
         }
+    }
+}
+
+function checkMatch(pattern, value) {
+    switch (pattern.constructor) {
+    case PLiteral: return value === pattern.value;
+    default: throw "no case";
     }
 }
 
@@ -187,6 +209,7 @@ function hasattr(obj, name) {
 function envLookup(name, env, globals) {
     if (hasattr(env, name)) return env[name];
     if (hasattr(globals, name)) return globals[name];
+    // TODO transition to error state instead of assertion error here?
     throw ('unbound: ' + name);
 }
 
@@ -206,4 +229,28 @@ if (require.main === module) {
             break;
         state = newState;
     }
+
+    console.log('');
+    console.log('');
+    console.log('');
+    var binop = (funcName, a, b) => new App(new App(new Var(funcName), a), b);
+    var lt = new PrimClosure((x, y) => x < y);
+    var add = new PrimClosure((x, y) => x + y);
+    var sub = new PrimClosure((x, y) => x - y);
+    var fib = new CodeClosure(['n'], new Match(binop('lt', new Var('n'), new Literal(2)), [
+        new Case(new PLiteral(true), new Var('n')),
+        new Case(new PLiteral(false), binop('add',
+                                            new App(new Var('fib'), binop('sub', new Var('n'), new Literal(1))),
+                                            new App(new Var('fib'), binop('sub', new Var('n'), new Literal(2))))),
+    ]));
+    var main = new App(new Var('fib'), new Literal(6));
+    var state = new ExprState(main, {}, [], { add, lt, fib, sub });
+    for (;;) {
+        console.log(state);
+        var newState = state.step();
+        if (newState === 'DONE')
+            break;
+        state = newState;
+    }
+
 }
