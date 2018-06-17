@@ -35,6 +35,20 @@ function apply1(f, x) {
     }
 }
 
+function sketch(v) {
+    if (Array.isArray(v)) {
+        return '[' + v.map(sketch).join(', ') + ']';
+    } else if (typeof v === 'object' && 'sketch' in v) {
+        return v.sketch();
+    } else {
+        return JSON.stringify(v);
+    }
+}
+
+function sketchEnv(e) {
+    return Object.entries(e).map(([k, v]) => k + '=' + sketch(v)).join(' ')
+}
+
 class PrimClosure {
     constructor(func, ...args) {
         this._func = func;
@@ -46,6 +60,8 @@ class PrimClosure {
             throw Error('prim closure arity');
         }
     }
+
+    sketch() { return "(" + this._func.name + this._args.map(a => ' ' + sketch(a)).join('') + ")"; }
 
     apply1(arg) {
         if (this._arity === 1) {
@@ -61,16 +77,16 @@ class CodeClosure {
         this._params = params;
         this._body = body;
         this._args = args;
-        this._arity = params.length - args.length;
+        this._arityRemaining = params.length - args.length;
 
         // caller is responsible to not do this
-        if (this._arity <= 0) {
+        if (this._arityRemaining <= 0) {
             throw Error('code closure arity');
         }
     }
 
     apply1(arg) {
-        if (this._arity === 1) {
+        if (this._arityRemaining === 1) {
             // return a substed function body
             const env = {};
             for (let i=0; i<this._args.length; ++i) {
@@ -89,29 +105,86 @@ class CodeClosure {
     }
 }
 
+class StructClosure {
+    constructor(name, arityTotal, ...args) {
+        this._name = name;
+        this._arityTotal = arityTotal;
+        this._args = args;
+
+        if (args.length > this._arityTotal) {
+            throw Error('struct closure arity');
+        }
+    }
+
+    sketch() { return "(" + this._name + this._args.map(a => ' '+sketch(a)).join('') + ")"; }
+
+    apply1(arg) {
+        if (this._args.length === this._arityTotal) {
+            return ['error', 'cannot apply a struct'];
+        }
+        return ['value', new StructClosure(this._name, this._arityTotal, ...this._args, arg)];
+    }
+
+    // treat this value as a pattern:
+    // return either null for no match, or an array of argument scrutinees.
+    unapply(scrutinee) {
+        if (this._args.length > 0) {
+            throw "can't use a curried constructor as a pattern";
+        }
+
+        // is it a struct? (as opposed to a number, or a curried constructor)
+        if (!(scrutinee instanceof StructClosure))
+            return null;
+        if (scrutinee._arityTotal !== scrutinee._args.length)
+            return null;
+
+        // is it the right kind of struct?
+        if (scrutinee._name !== this._name)
+            return null;
+        if (scrutinee._arityTotal !== this._arityTotal)
+            throw "How did the names match but not the arities???"
+
+        // then get the fields!
+        return scrutinee._args;
+    }
+}
+
 
 class Expr {}
 class Literal extends Expr {
     constructor(value) { super(); this.value = value }
+    sketch() { return sketch(this.value); }
 }
 class App extends Expr {
     constructor(func, arg) { super(); this.func = func; this.arg = arg; }
+    sketch() { return "(" + sketch(this.func) + ' ' + sketch(this.arg) + ")"; }
 }
 class Match extends Expr {
     constructor(scrutinee, cases) { super(); this.scrutinee = scrutinee; this.cases = cases; }
+    sketch() { return "(match " + sketch(this.scrutinee) + '{ ' + this.cases.map(sketch).join('; ') + '})'; }
 }
 class Var extends Expr {
     constructor(name) { super(); this.name = name; }
+    sketch() { return this.name; }
 }
 class Case {
     constructor(pattern, expr) { this.pattern = pattern; this.expr = expr; }
+    sketch() { return sketch(this.pattern) + ' => ' + sketch(this.expr); }
 }
 
 class Pattern {}
 class PLiteral extends Pattern {
     constructor(value) { super(); this.value = value; }
+    sketch() { return sketch(this.value); }
 }
-// TODO pattern structs
+class PVar extends Pattern {
+    constructor(name) { super(); this.name = name; }
+    sketch() { return this.name; }
+}
+class PStruct extends Pattern {
+    constructor(name, argPats) { super(); this.name = name; this.argPats = argPats; }
+    sketch() { return "(" + this.name + this.argPats.map(p => ' ' + sketch(p)).join('') + ")"; }
+}
 
 /*
 App1 Expr Env
@@ -121,12 +194,15 @@ Match0 Cases Env
 class Frame {}
 class App1 extends Frame {
     constructor(funcExpr, env) { super(); this.funcExpr = funcExpr; this.env = env; }
+    sketch() { return "(" + sketch(this.funcExpr) + " _)"; }
 }
 class App0 extends Frame {
     constructor(argValue) { super(); this.argValue = argValue; }
+    sketch() { return "(_ " + sketch(this.argValue) + ")"; }
 }
 class Match0 extends Frame {
     constructor(cases, env) { super(); this.cases = cases; this.env = env; }
+    sketch() { return "(match _ { ... })"; }
 }
 
 
@@ -148,6 +224,10 @@ class ExprState extends State {
             case Match: return new ExprState(this.currentExpr.scrutinee, this.env, [new Match0(this.currentExpr.cases, this.env)].concat(this.stack), this.globals);
             default: throw "no case";
         }
+    }
+
+    sketch() {
+        return "> " + sketch(this.currentExpr) + '\t' + sketchEnv(this.env) + '\t' + sketch(this.stack);
     }
 }
 class ValueState extends State {
@@ -180,9 +260,9 @@ class ValueState extends State {
                 var scrut = this.currentValue;
                 var cases = frame.cases;
                 for (var case_ of cases) {
-                    // TODO allow checkMatch to return variable bindings
-                    if (checkMatch(case_.pattern, scrut)) {
-                        return new ExprState(case_.expr, frame.env, stack, this.globals);
+                    var matchVars = tryMatch(case_.pattern, scrut, this.globals);
+                    if (matchVars) {
+                        return new ExprState(case_.expr, { ...frame.env, ...matchVars }, stack, this.globals);
                     }
                 }
                 throw "TODO transition to no-match-case error";
@@ -190,11 +270,33 @@ class ValueState extends State {
             default: throw "no case";
         }
     }
+
+    sketch() {
+        return "< " + sketch(this.currentValue) + '\t' + sketch(this.stack);
+    }
 }
 
-function checkMatch(pattern, value) {
+function tryMatch(pattern, value, globals) {
     switch (pattern.constructor) {
-    case PLiteral: return value === pattern.value;
+    case PLiteral: return (value === pattern.value) ? {} : null;
+    case PVar: return { [pattern.name]: value };
+    case PStruct: {
+        var unfunc = envLookup(pattern.name, {}, globals);
+        var maybeArgs = unfunc.unapply(value);
+        if (maybeArgs === null)
+            return null;
+
+        var result = {};
+        for (var i=0; i<maybeArgs.length; ++i) {
+            var arg = maybeArgs[i];
+            var pat = pattern.argPats[i];
+            var subResult = tryMatch(pat, arg, globals);
+            if (subResult === null)
+                return null;
+            Object.assign(result, subResult);
+        }
+        return result;
+    }; throw "fell off";
     default: throw "no case";
     }
 }
@@ -247,6 +349,33 @@ if (require.main === module) {
     var state = new ExprState(main, {}, [], { add, lt, fib, sub });
     for (;;) {
         console.log(state);
+        var newState = state.step();
+        if (newState === 'DONE')
+            break;
+        state = newState;
+    }
+
+
+    console.log('');
+    console.log('');
+    console.log('');
+
+    var revappend = new CodeClosure(['xs', 'ys'], new Match(new Var('xs'), [
+        new Case(new PStruct('Empty', []), new Var('ys')),
+        new Case(new PStruct('Cons', [new PVar('x'), new PVar('xs')]),
+                 binop('revappend', new Var('xs'), binop('Cons', new Var('x'), new Var('ys')))),
+    ]));
+
+    var Empty = new StructClosure('Empty', 0);
+    var Cons = new StructClosure('Cons', 2);
+
+    var main = binop('revappend',
+                     binop('Cons', new Literal(2), binop('Cons', new Literal(1), new Var('Empty'))),
+                     binop('Cons', new Literal(3), new Var('Empty')));
+    var state = new ExprState(main, {}, [], { Empty, Cons, revappend });
+    for (;;) {
+        console.log(sketch(state));
+        console.log('');
         var newState = state.step();
         if (newState === 'DONE')
             break;
