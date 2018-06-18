@@ -1,3 +1,15 @@
+{
+  var {
+    App,
+    Case,
+    Literal,
+    Match,
+    PStruct,
+    Var,
+  } = global.ast;
+
+}
+
 
 Program = _line stmts:(Stmt _line)* { return stmts.map(x=>x[0]) }
 
@@ -6,6 +18,7 @@ Stmt = Equation
      
 Equation = head:Id args:(_ Id)* _ "=" _ body:Expression {
   args = args.map(x => x[1]); // drop internal whitespace
+  throw "TODO defs"
   return {
     type: "Def",
     name: head,
@@ -17,19 +30,14 @@ Equation = head:Id args:(_ Id)* _ "=" _ body:Expression {
 Expression = Match / Call
 
 Match = "match" _ scrut:Expression _ "{" _line cases:(Case _line)* "}" {
-  return {
-    type: "Match",
-    scrutinee: scrut,
-    cases: cases.map(x=>x[0]),
-  };
+  return new Match(
+    scrut,
+    cases.map(x=>x[0]),
+  )
 }
 
 Case = lhs:Pattern _ "->" (_line) rhs:Expression {
-  return {
-    type: "Case",
-    lhs: lhs,
-    rhs: rhs,
-  };
+  return new Case(lhs, rhs)
 }
 
 Pattern = PatCall
@@ -37,24 +45,20 @@ PatCall = PatHole / PatCtor
 PatArg = PatHole / "(" _ c:PatCall _ ")" { return c }
 PatHole = name:Id { return { type: "PatHole", name: name } }
 PatCtor = name:Ctor args:(_ PatArg)* {
-  return {
-    type: "PatCtor",
-    name: name,
-    args: args.map(x=>x[1]),
-  };
+  return new PStruct(name, args.map(x=>x[1]))
 }
 
 Call = f:Arg xs:(_ Arg)* {
   function app(f, x) {
-    return { type: "App", func: f, arg: x };
+    return new App(f, x);
   }
   xs = xs.map(x=>x[1]); // select the Arg part
   return xs.reduce(app, f);
 }
 
-Arg = name:Id { return { type: "Id", name: name } }
-    / name:Ctor { return { type: "Ctor", name: name } }
-    / num:Num { return { type: "Num", literal: num } }
+Arg = name:Id { return new Var(name) }
+    / name:Ctor { return new Var(name) }
+    / num:Num { return new Literal(+num) }
     / "(" _ e:Expression _ ")" { return e }
 
 // TODO newlines within an expression? in a call?
