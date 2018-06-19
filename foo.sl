@@ -1,3 +1,7 @@
+
+double x = add x x
+twice f x = f (f x)
+
 add
 add 1
 add 1 2

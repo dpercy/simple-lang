@@ -14,14 +14,21 @@
     DefFunc,
   } = global.ast;
 
+  function loc(v) {
+    v.location = location();
+    return v;
+  }
+
 }
 
 
 Program = _line stmts:(Stmt _line)* { return stmts.map(x=>x[0]) }
 
-Stmt = Equation
-     / StructDefinition
-     / Expression
+Stmt = v:( Equation
+         / StructDefinition
+         / Expression) {
+  return loc(v)
+}
      
 Equation = head:Id args:(_ Id)* _ "=" _ body:Expression {
   args = args.map(x => x[1]); // drop internal whitespace
@@ -36,7 +43,9 @@ StructDefinition = "struct" _ name:Ctor _ arity:Num {
   return new DefStruct(name, +arity);
 }
 
-Expression = Match / Call
+Expression = v:(Match / Call) {
+  return loc(v)
+}
 
 Match = "match" _ scrut:Expression _ "{" _line cases:(Case _line)* "}" {
   return new Match(

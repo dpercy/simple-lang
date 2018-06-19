@@ -88,10 +88,10 @@ if (require.main === module) {
     for (const filename of args) {
         const text = fs.readFileSync(filename).toString();
         const program = parser.parse(text);
-        ////console.log('program:', sketch(program));
+        ////console.log('program:', program);
         const results = runProgram(program, primEnv);
         for (const [stmt, value] of results) {
-            console.log(stmt.name || sketch(stmt), sketch(value));
+            console.log(stmt.name || sketch(stmt), '=', sketch(value));
         }
     }
 }
