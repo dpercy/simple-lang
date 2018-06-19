@@ -72,7 +72,6 @@ function* runProgram(stmts, primEnv) {
         if (stmt instanceof Def) {
             globals[stmt.name] = val;
         }
-        debugger;
         yield [stmt, val];
     }
 }
