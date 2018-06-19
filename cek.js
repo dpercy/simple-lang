@@ -40,21 +40,14 @@ var {
     PStruct,
 } = require('./ast');
 
+const { sketch } = require('./sketch');
+
+
 function apply1(f, x) {
     if ('apply1' in f) {
         return f.apply1(x);
     } else {
         return ['error', 'cannot apply a non-function'];
-    }
-}
-
-function sketch(v) {
-    if (Array.isArray(v)) {
-        return '[' + v.map(sketch).join(', ') + ']';
-    } else if (typeof v === 'object' && 'sketch' in v) {
-        return v.sketch();
-    } else {
-        return JSON.stringify(v);
     }
 }
 
@@ -86,14 +79,15 @@ class PrimClosure {
 }
 
 class CodeClosure {
-    constructor(params, body, ...args) {
+    constructor(name, params, body, ...args) {
+        this._name = name;
         this._params = params;
         this._body = body;
         this._args = args;
         this._arityRemaining = params.length - args.length;
 
         // caller is responsible to not do this
-        if (this._arityRemaining <= 0) {
+        if (!(this._arityRemaining > 0)) {
             throw Error('code closure arity');
         }
     }
@@ -113,8 +107,12 @@ class CodeClosure {
             }];
         } else {
             // return a new closure
-            return ['value', new CodeClosure(this._params, this._body, ...this._args, arg)];
+            return ['value', new CodeClosure(this._name, this._params, this._body, ...this._args, arg)];
         }
+    }
+
+    sketch() {
+        return "(" + this._name + this._args.map(a => ' ' + sketch(a)).join('') + ")";
     }
 }
 
@@ -289,10 +287,21 @@ function hasattr(obj, name) {
     return Object.prototype.hasOwnProperty.call(obj, name);
 }
 function envLookup(name, env, globals) {
-    if (hasattr(env, name)) return env[name];
-    if (hasattr(globals, name)) return globals[name];
-    // TODO transition to error state instead of assertion error here?
-    throw ('unbound: ' + name);
+    var result;
+    if (hasattr(env, name)) {
+        result = env[name];
+    } else if (hasattr(globals, name)) {
+        result = globals[name];
+    } else {
+        // TODO transition to error state instead of assertion error here?
+        throw ('unbound: ' + name);
+    }
+
+    // we have a result: but, is it the special value "undefined" ?
+    if (result === undefined)
+        throw ('value is not computed yet: ' + name);
+
+    return result;
 }
 
 
@@ -301,7 +310,7 @@ if (require.main === module) {
 
 
     var mul = new PrimClosure((x, y) => x * y);
-    var square = new CodeClosure(['x'], new App(new App(new Var('mul'), new Var('x')), new Var('x')));
+    var square = new CodeClosure('square', ['x'], new App(new App(new Var('mul'), new Var('x')), new Var('x')));
     var square3 = new App(new Var('square'), new Literal(3));
     var state = new ExprState(square3, {}, [], { square, mul });
     for (;;) {
@@ -319,7 +328,7 @@ if (require.main === module) {
     var lt = new PrimClosure((x, y) => x < y);
     var add = new PrimClosure((x, y) => x + y);
     var sub = new PrimClosure((x, y) => x - y);
-    var fib = new CodeClosure(['n'], new Match(binop('lt', new Var('n'), new Literal(2)), [
+    var fib = new CodeClosure('square', ['n'], new Match(binop('lt', new Var('n'), new Literal(2)), [
         new Case(new PLiteral(true), new Var('n')),
         new Case(new PLiteral(false), binop('add',
                                             new App(new Var('fib'), binop('sub', new Var('n'), new Literal(1))),
@@ -340,7 +349,7 @@ if (require.main === module) {
     console.log('');
     console.log('');
 
-    var revappend = new CodeClosure(['xs', 'ys'], new Match(new Var('xs'), [
+    var revappend = new CodeClosure('revappend', ['xs', 'ys'], new Match(new Var('xs'), [
         new Case(new PStruct('Empty', []), new Var('ys')),
         new Case(new PStruct('Cons', [new PVar('x'), new PVar('xs')]),
                  binop('revappend', new Var('xs'), binop('Cons', new Var('x'), new Var('ys')))),
@@ -369,5 +378,8 @@ module.exports = {
     PrimClosure,
     StructClosure,
 
-    ExprState
+    ExprState,
+    ValueState,
+
+    sketch
 };

@@ -1,4 +1,25 @@
 
+const { sketch } = require('./sketch');
+
+class Def {}
+class DefVal extends Def {
+    constructor(name, value) { super(); this.name = name; this.value = value; }
+    sketch() { return this.name + " = " + sketch(this.value); }
+}
+class DefStruct extends Def {
+    constructor(name, arity) { super(); this.name = name; this.arity = arity; }
+    sketch() { return "struct " + this.name + " " + this.arity; }
+}
+class DefFunc extends Def {
+    constructor(name, params, body) {
+        super();
+        this.name = name;
+        this.params = params;
+        this.body = body;
+    }
+    sketch() { return this.name + this.params.map(p => ' ' + p).join('') + sketch(this.body); }
+}
+
 class Expr {}
 class Literal extends Expr {
     constructor(value) { super(); this.value = value }
@@ -6,7 +27,13 @@ class Literal extends Expr {
 }
 class App extends Expr {
     constructor(func, arg) { super(); this.func = func; this.arg = arg; }
-    sketch() { return "(" + sketch(this.func) + ' ' + sketch(this.arg) + ")"; }
+    sketch() {
+        return "(" + this.sketchOpen() + ")";
+    }
+    sketchOpen() {
+        const lhs = (this.func instanceof App) ? this.func.sketchOpen() : sketch(this.func);
+        return lhs + ' ' + sketch(this.arg);
+    }
 }
 class Match extends Expr {
     constructor(scrutinee, cases) { super(); this.scrutinee = scrutinee; this.cases = cases; }
@@ -47,4 +74,9 @@ module.exports = {
     PLiteral,
     PVar,
     PStruct,
+
+    Def,
+    DefVal,
+    DefStruct,
+    DefFunc,
 };

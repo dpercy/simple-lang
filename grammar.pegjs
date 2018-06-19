@@ -1,11 +1,17 @@
 {
   var {
+    Var,
     App,
     Case,
     Literal,
+    
     Match,
     PStruct,
-    Var,
+    PVar,
+
+    DefVal,
+    DefStruct,
+    DefFunc,
   } = global.ast;
 
 }
@@ -14,17 +20,20 @@
 Program = _line stmts:(Stmt _line)* { return stmts.map(x=>x[0]) }
 
 Stmt = Equation
+     / StructDefinition
      / Expression
      
 Equation = head:Id args:(_ Id)* _ "=" _ body:Expression {
   args = args.map(x => x[1]); // drop internal whitespace
-  throw "TODO defs"
-  return {
-    type: "Def",
-    name: head,
-    args: args,
-    body: body,
-  };
+  if (args.length === 0) {
+    return new DefVal(head, body);
+  } else {
+    return new DefFunc(head, args, body);
+  }
+}
+
+StructDefinition = "struct" _ name:Ctor _ arity:Num {
+  return new DefStruct(name, +arity);
 }
 
 Expression = Match / Call
@@ -43,7 +52,7 @@ Case = lhs:Pattern _ "->" (_line) rhs:Expression {
 Pattern = PatCall
 PatCall = PatHole / PatCtor
 PatArg = PatHole / "(" _ c:PatCall _ ")" { return c }
-PatHole = name:Id { return { type: "PatHole", name: name } }
+PatHole = name:Id { return new PVar(name) }
 PatCtor = name:Ctor args:(_ PatArg)* {
   return new PStruct(name, args.map(x=>x[1]))
 }
