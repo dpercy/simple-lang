@@ -240,7 +240,7 @@ class ValueState extends State {
                 for (var case_ of cases) {
                     var matchVars = tryMatch(case_.pattern, scrut, this.globals);
                     if (matchVars) {
-                        return new ExprState(case_.expr, { ...frame.env, ...matchVars }, stack, this.globals);
+                        return new ExprState(case_.expr, Object.assign({}, frame.env, matchVars), stack, this.globals);
                     }
                 }
                 throw "TODO transition to no-match-case error";

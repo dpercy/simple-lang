@@ -1,11 +1,8 @@
 const fs = require('fs');
 const ast = require('./ast');
-global.ast = ast;
 const { sketch } = require('./sketch');
 
-const peg = require('pegjs');
-const grammar = fs.readFileSync('grammar.pegjs').toString();
-const parser = peg.generate(grammar);
+const parser = require('./grammar.generated');
 
 const {
     PrimClosure,
@@ -59,7 +56,7 @@ function* runProgram(stmts, primEnv) {
     // yields a [statement, value] pair for each statement in the input.
 
     // create an env where each global is "not yet computed"
-    var globals = { ...(primEnv || {}) };
+    var globals = Object.assign({}, primEnv);
     for (const stmt of stmts) {
         if (stmt instanceof Def) {
             globals[stmt.name] = undefined;
@@ -77,6 +74,10 @@ function* runProgram(stmts, primEnv) {
 }
 
 
+module.exports = {
+    parser, runProgram, sketch, PrimClosure
+};
+
 if (require.main === module) {
     const [_node, _main, ...args] = process.argv;
 
@@ -85,7 +86,8 @@ if (require.main === module) {
     };
     
     for (const filename of args) {
-        const text = fs.readFileSync(filename).toString();
+        const readFileSyncAtRunTime = fs.readFileSync;
+        const text = readFileSyncAtRunTime(filename).toString();
         const program = parser.parse(text);
         ////console.log('program:', program);
         const results = runProgram(program, primEnv);

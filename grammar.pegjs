@@ -12,7 +12,7 @@
     DefVal,
     DefStruct,
     DefFunc,
-  } = global.ast;
+  } = require('./ast');
 
   function loc(v) {
     v.location = location();

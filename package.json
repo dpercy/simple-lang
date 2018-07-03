@@ -2,8 +2,14 @@
   "name": "simple-lang",
   "version": "0.1.0",
   "main": "main.js",
-  "scripts": {},
+  "scripts": {
+    "dev": "./node_modules/.bin/pegjs  -o grammar.generated.js grammar.pegjs && parcel index.html"
+  },
   "dependencies": {
+    "debounce": "^1.1.0",
     "pegjs": "^0.10.0"
+  },
+  "devDependencies": {
+    "parcel": "^1.9.2"
   }
 }
