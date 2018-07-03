@@ -6,6 +6,7 @@
     "dev": "./node_modules/.bin/pegjs  -o grammar.generated.js grammar.pegjs && parcel index.html"
   },
   "dependencies": {
+    "babel-polyfill": "^6.26.0",
     "debounce": "^1.1.0",
     "pegjs": "^0.10.0"
   },

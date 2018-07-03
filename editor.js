@@ -1,3 +1,7 @@
+// parcel compiles generators using a polyfill
+// (instead of just relying on browser support...)
+require('babel-polyfill');
+
 const debounce = require('debounce');
 const { parser, runProgram, sketch, PrimClosure } = require('./main');
 
