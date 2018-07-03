@@ -14,12 +14,24 @@ function editorChanged() {
     const text = editor.value;
     console.log('source:', text);
 
-    const program = parser.parse(text);
-    const results = runProgram(program, {
-        add: new PrimClosure(function add(x, y) { return x + y; }),
-    });
-    for (const [stmt, value] of results) {
-        console.log(stmt.location, ':', stmt.name || sketch(stmt), '=', sketch(value));
+    let program;
+    try {
+        program = parser.parse(text);
+    } catch(e) {
+        console.error('parse error:', e);
+        return;
+    }
+
+    try {
+        const results = runProgram(program, {
+            add: new PrimClosure(function add(x, y) { return x + y; }),
+        });
+        for (const [stmt, value] of results) {
+            console.log(stmt.location, ':', stmt.name || sketch(stmt), '=', sketch(value));
+        }
+    } catch(e) {
+        console.error('evaluation error:', e);
+        return;
     }
 }
 editorChanged = debounce(editorChanged, 200);
