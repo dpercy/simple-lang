@@ -47,9 +47,11 @@ function editorChanged() {
         return;
     }
 
-    try {
+    //try {
         const results = runProgram(program, {
             add: new PrimClosure(function add(x, y) { return x + y; }),
+            // TODO need to return a struct here, not a boolean...
+            lt: new PrimClosure(function lt(x, y) { return x < y; }),
         });
         for (const [stmt, value] of results) {
             console.log(stmt.location, ':', stmt.name || sketch(stmt), '=', sketch(value));
@@ -58,10 +60,10 @@ function editorChanged() {
             addResultWidget({ line: line-1, ch: column-1 }, sketch(value), 'result-value');
             //addResultWidget(
         }
-    } catch(e) {
-        console.error('evaluation error:', e);
-        return;
-    }
+    //} catch(e) {
+    //    console.error('evaluation error:', e);
+    //    return;
+    //}
 }
 editorChanged = debounce(editorChanged, 200);
 

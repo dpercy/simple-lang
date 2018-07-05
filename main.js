@@ -46,7 +46,7 @@ function runStmtToValue(stmt, globals) {
     case DefFunc:
         return new CodeClosure(stmt.name, stmt.params, stmt.body);
     case DefVal:
-        return runExprToValue(stmt.value);
+        return runExprToValue(stmt.value, globals);
     default:
         throw "no case for: " + stmt;
     }

@@ -191,6 +191,7 @@ class ExprState extends State {
         this.env = env;
         this.stack = stack;
         this.globals = globals;
+        if (!this.globals) debugger
     }
 
     step() {
@@ -214,6 +215,7 @@ class ValueState extends State {
         this.currentValue = currentValue;
         this.stack = stack;
         this.globals = globals;
+        if (!this.globals) debugger
     }
 
     step() {
@@ -230,7 +232,7 @@ class ValueState extends State {
                 switch (tag) {
                 case 'value': return new ValueState(newThing, stack, this.globals);
                 case 'expr+env': return new ExprState(newThing.expr, newThing.env, stack, this.globals);
-                case 'error': throw "TODO transition to error state";
+                case 'error': debugger; throw "TODO transition to error state";
                 default: throw 'bad tag';
                 }
             }; throw "fell out";
@@ -284,9 +286,14 @@ function newMachine(expr) {
 }
 
 function hasattr(obj, name) {
-    return Object.prototype.hasOwnProperty.call(obj, name);
+    try {
+        return Object.prototype.hasOwnProperty.call(obj, name);
+    } catch(e) { debugger }
 }
 function envLookup(name, env, globals) {
+    if (!env)
+        debugger
+
     var result;
     if (hasattr(env, name)) {
         result = env[name];
