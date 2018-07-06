@@ -17,6 +17,7 @@ window.editor = editor;
 editor.focus();
 
 const resultWidgets = [];
+const errorMarkers = [];
 
 function invalidateResultWidgets() {
     const ws = resultWidgets.splice(0);
@@ -25,6 +26,13 @@ function invalidateResultWidgets() {
         w.parentElement.removeChild(w);
     }
 }
+function invalidateErrorMarkers() {
+    const ms = errorMarkers.splice(0);
+    for (const m of ms) {
+        m.clear();
+    }
+}
+
 function addResultWidget(pos, text, className) {
     const n = document.createElement('div');
     n.className = className;
@@ -33,8 +41,14 @@ function addResultWidget(pos, text, className) {
     resultWidgets.push(n);
 }
 
+// Get a CodeMirror position from a PegJS position
+function cmFromPJ({ line, column }) {
+    return { line: line-1, ch: column-1 };
+}
+
 function editorChanged() {
     invalidateResultWidgets();
+    invalidateErrorMarkers();
 
     const text = editor.getValue();
     console.log('source:', text);
@@ -44,6 +58,11 @@ function editorChanged() {
         program = parser.parse(text);
     } catch(e) {
         console.error('parse error:', e);
+        addResultWidget(cmFromPJ(e.location.end), e.message, 'result-widget-error');
+        const m = editor.markText(cmFromPJ(e.location.start),
+                                  cmFromPJ(e.location.end),
+                                  { className: 'mark-error' });
+        errorMarkers.push(m);
         return;
     }
 
@@ -57,7 +76,7 @@ function editorChanged() {
             console.log(stmt.location, ':', stmt.name || sketch(stmt), '=', sketch(value));
             // stmt.location.{start,end}.{line,column} are both 1-indexed
             const { line, column } = stmt.location.end;
-            addResultWidget({ line: line-1, ch: column-1 }, sketch(value), 'result-value');
+            addResultWidget({ line: line-1, ch: column-1 }, sketch(value), 'result-widget-value');
             //addResultWidget(
         }
     //} catch(e) {

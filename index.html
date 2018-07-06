@@ -1,19 +1,29 @@
 <link rel="stylesheet" href="vendor/codemirror.css">
 <style>
-body {
-  margin: 0;
-  padding: 0;
-}
-.CodeMirror {
-  width: 100%;
-  height: 100%;
-}
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  .CodeMirror {
+    width: 100%;
+    height: 100%;
+  }
 
-.result-value {
-  border: 1px solid blue;
-  border-radius: 2px;
-  color: blue;
-}
+  .result-widget-value {
+    border: 1px solid blue;
+    border-radius: 2px;
+    color: blue;
+  }
+
+  .result-widget-error {
+    border: 1px solid brown;
+    border-radius: 2px;
+    color: brown;
+  }
+
+  .mark-error {
+    background-color: pink;
+  }
 </style>
 
 <textarea id="editor">
