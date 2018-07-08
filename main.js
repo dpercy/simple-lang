@@ -53,7 +53,8 @@ function runStmtToValue(stmt, globals) {
 }
 
 function* runProgram(stmts, primEnv) {
-    // yields a [statement, value] pair for each statement in the input.
+    // yields a [statement, value, error] triple for each statement in the input.
+    // `value` is only valid if `error` is non-null.
 
     // create an env where each global is "not yet computed"
     var globals = Object.assign({}, primEnv);
@@ -65,11 +66,18 @@ function* runProgram(stmts, primEnv) {
 
     // evaluate each statement in the global env
     for (const stmt of stmts) {
-        const val = runStmtToValue(stmt, globals);
+        let val;
+        try {
+            val = runStmtToValue(stmt, globals);
+        } catch(e) {
+            yield [stmt, undefined, e];
+            continue;
+        }
+
         if (stmt instanceof Def) {
             globals[stmt.name] = val;
         }
-        yield [stmt, val];
+        yield [stmt, val, null];
     }
 }
 

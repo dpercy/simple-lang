@@ -75,23 +75,20 @@ function editorChanged() {
         return;
     }
 
-    //try {
-        const results = runProgram(program, {
-            add: new PrimClosure(function add(x, y) { return x + y; }),
-            // TODO need to return a struct here, not a boolean...
-            lt: new PrimClosure(function lt(x, y) { return x < y; }),
-        });
-        for (const [stmt, value] of results) {
-            console.log(stmt.location, ':', stmt.name || sketch(stmt), '=', sketch(value));
+    const results = runProgram(program, {
+        add: new PrimClosure(function add(x, y) { return x + y; }),
+        // TODO need to return a struct here, not a boolean...
+        lt: new PrimClosure(function lt(x, y) { return x < y; }),
+    });
+    for (const [stmt, value, error] of results) {
+        const { line, column } = stmt.location.end;
+        if (error == null) {
             // stmt.location.{start,end}.{line,column} are both 1-indexed
-            const { line, column } = stmt.location.end;
             addResultWidget({ line: line-1, ch: column-1 }, sketch(value), 'result-widget-value');
-            //addResultWidget(
+        } else {
+            addResultWidget({ line: line-1, ch: column-1 }, error, 'result-widget-error');
         }
-    //} catch(e) {
-    //    console.error('evaluation error:', e);
-    //    return;
-    //}
+    }
 }
 editorChanged = debounce(editorChanged, 200);
 
