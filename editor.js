@@ -12,6 +12,9 @@ const editorTextArea = document.getElementById('editor');
 const editor = CodeMirror.fromTextArea(editorTextArea, {
     lineNumbers: true,
     lineWrapping: false,
+
+    // TODO how does this 'breakpoints' thing work?
+    gutters: ["CodeMirror-linenumbers", "breakpoints"],
 });
 window.editor = editor;
 editor.focus();
@@ -37,8 +40,12 @@ function addResultWidget(pos, text, className) {
     const n = document.createElement('div');
     n.className = className;
     n.innerText = text;
-    editor.addWidget(pos, n)
-    resultWidgets.push(n);
+
+    const w = document.createElement('div');
+    w.appendChild(n);
+    w.className = 'result-wrapper';
+    editor.addWidget(pos, w)
+    resultWidgets.push(w);
 }
 
 // Get a CodeMirror position from a PegJS position
@@ -98,6 +105,18 @@ function restoreEditor() {
     editor.setValue(localStorage.editorContents);
 }
 
+editor.on("gutterClick", function(cm, n) {
+    var info = editor.lineInfo(n);
+    editor.setGutterMarker(n, "breakpoints", info.gutterMarkers ? null : makeMarker());
+});
+
+function makeMarker() {
+    var marker = document.createElement("div");
+    marker.style.color = "#822";
+    marker.innerHTML = "●";
+    marker.className = 'breakpoint';
+    return marker;
+}
 
 
 restoreEditor();
