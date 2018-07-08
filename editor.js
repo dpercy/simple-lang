@@ -47,6 +47,8 @@ function cmFromPJ({ line, column }) {
 }
 
 function editorChanged() {
+    saveEditorLocally();
+
     invalidateResultWidgets();
     invalidateErrorMarkers();
 
@@ -88,3 +90,14 @@ editorChanged = debounce(editorChanged, 200);
 
 editor.on('keyup', editorChanged);
 editor.on('change', editorChanged);
+
+function saveEditorLocally() {
+    localStorage.editorContents = editor.getValue();
+}
+function restoreEditor() {
+    editor.setValue(localStorage.editorContents);
+}
+
+
+
+restoreEditor();
